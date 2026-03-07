@@ -4,6 +4,14 @@ export function subjectFor(moduleName: string, event: string): string {
   return `feedeater.${moduleName}.${event}`;
 }
 
+export function ingestRejectedSubjectFor(moduleName: string): string {
+  return subjectFor(moduleName, "ingestRejected");
+}
+
+export function healthStatusSubjectFor(moduleName: string): string {
+  return subjectFor(moduleName, "healthStatus");
+}
+
 export function isFeedeaterSubject(subject: string): boolean {
   return subject.startsWith("feedeater.");
 }
@@ -16,5 +24,4 @@ export function jobSubjectFor(params: { moduleName: string; queue: string; job: 
 export function isJobSubject(subject: string): boolean {
   return subject.startsWith("feedeater.jobs.");
 }
-
 

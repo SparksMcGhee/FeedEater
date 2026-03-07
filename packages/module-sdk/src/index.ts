@@ -17,6 +17,25 @@ export type StringCodecLike = {
   decode(b: Uint8Array): string;
 };
 
+export type EmitIngestRejectedParams = {
+  reason: string;
+  timestamp?: string;
+  source_subject?: string;
+  source_symbol?: string;
+  symbol?: string;
+  ticker?: string;
+  pair?: string;
+  error_code?: string;
+  stage?: string;
+  details?: Record<string, unknown>;
+};
+
+export type EmitHealthStatusParams = {
+  status: string;
+  timestamp?: string;
+  details?: Record<string, unknown>;
+};
+
 export type ModuleRuntimeContext = {
   moduleName: string;
   modulesDir: string;
@@ -25,6 +44,8 @@ export type ModuleRuntimeContext = {
   sc: StringCodecLike;
   getQueue(queueName: string): QueueLike;
   fetchInternalSettings(moduleName: string): Promise<Record<string, unknown>>;
+  emitIngestRejected(params: EmitIngestRejectedParams): void;
+  emitHealthStatus(params: EmitHealthStatusParams): void;
 };
 
 export type ModuleJobHandler = (params: {
@@ -39,5 +60,4 @@ export type ModuleRuntime = {
    */
   handlers: Record<string, Record<string, ModuleJobHandler>>;
 };
-
 

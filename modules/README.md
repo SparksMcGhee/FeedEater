@@ -45,6 +45,11 @@ Your runtime must export:
 Where the module returns a handler map:
 - `handlers[queueName][jobName] = async ({ ctx, job }) => { ... }`
 
+The runtime `ctx` also exposes:
+
+- `ctx.emitIngestRejected(...)`
+- `ctx.emitHealthStatus(...)`
+
 See reference implementations:
 - `modules/example/`
 - `modules/slack/`
@@ -127,6 +132,13 @@ The response includes a `response` string from the model and optional `token_rat
 
 - Subjects should follow: `feedeater.<moduleName>.<event>`
 - Prefer emitting normalized messages on `feedeater.<moduleName>.messageCreated` when ingesting new content.
+- Emit upstream drops on `feedeater.<moduleName>.ingestRejected`
+- Emit liveness / freshness state on `feedeater.<moduleName>.healthStatus`
+
+Recommended use:
+
+- `ctx.emitIngestRejected(...)` when a module sees upstream data but drops it before publishing the normal event
+- `ctx.emitHealthStatus(...)` for module-specific heartbeats or richer health details than the worker can infer
 
 ---
 
@@ -137,5 +149,4 @@ The response includes a `response` string from the model and optional `token_rat
 - `src/runtime.ts` exports `createModuleRuntime()`
 - module has at least one queue in `queues` and a handler for every job in `jobs`
 - private schema is created on first run (fail fast if schema/table creation fails)
-
 

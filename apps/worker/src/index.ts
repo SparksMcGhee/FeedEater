@@ -2,9 +2,13 @@ import { connect, StringCodec } from "nats";
 import { Pool } from "pg";
 import {
   ContextUpdatedEventSchema,
+  HealthStatusEventSchema,
+  IngestRejectedEventSchema,
   JobRunEventSchema,
   MessageCreatedEventSchema,
   NormalizedMessageSchema,
+  healthStatusSubjectFor,
+  ingestRejectedSubjectFor,
   createSettingsClient,
   jobSubjectFor,
   subjectFor,
@@ -66,12 +70,80 @@ const DATABASE_URL = requiredEnv("DATABASE_URL");
 const sc = StringCodec();
 const JOB_SUBJECT_WILDCARD = "feedeater.jobs.>";
 const CONTEXT_SUBJECT_WILDCARD = "feedeater.*.contextUpdated";
+const DEFAULT_HEALTH_HEARTBEAT_SECONDS = 60;
 
 type JobTrigger = { type: "schedule" | "manual" | "event"; subject?: string; messageId?: string };
+type ModuleHealthState = {
+  status: string;
+  details?: Record<string, unknown>;
+  updatedAt: string;
+};
 
 function serializeError(err: unknown): string {
   if (err instanceof Error) return `${err.name}: ${err.message}\n${err.stack ?? ""}`.trim();
   return typeof err === "string" ? err : safeJson(err);
+}
+
+function inferModuleNameFromSubject(subject: string): string {
+  const parts = String(subject ?? "").split(".");
+  if (parts.length < 3 || parts[0] !== "feedeater") return "unknown";
+  return parts[1] || "unknown";
+}
+
+function publishIngestRejected(params: {
+  nc: import("nats").NatsConnection;
+  sc: import("nats").StringCodec;
+  moduleName: string;
+  reason: string;
+  timestamp?: string;
+  source_subject?: string;
+  source_symbol?: string;
+  symbol?: string;
+  ticker?: string;
+  pair?: string;
+  error_code?: string;
+  stage?: string;
+  details?: Record<string, unknown>;
+}) {
+  const payload = IngestRejectedEventSchema.parse({
+    type: "IngestRejected",
+    module: params.moduleName,
+    timestamp: params.timestamp ?? new Date().toISOString(),
+    reason: params.reason,
+    ...(params.source_subject ? { source_subject: params.source_subject } : {}),
+    ...(params.source_symbol ? { source_symbol: params.source_symbol } : {}),
+    ...(params.symbol ? { symbol: params.symbol } : {}),
+    ...(params.ticker ? { ticker: params.ticker } : {}),
+    ...(params.pair ? { pair: params.pair } : {}),
+    ...(params.error_code ? { error_code: params.error_code } : {}),
+    ...(params.stage ? { stage: params.stage } : {}),
+    ...(params.details ? { details: params.details } : {}),
+  });
+  params.nc.publish(
+    ingestRejectedSubjectFor(params.moduleName),
+    params.sc.encode(JSON.stringify(payload))
+  );
+}
+
+function publishHealthStatus(params: {
+  nc: import("nats").NatsConnection;
+  sc: import("nats").StringCodec;
+  moduleName: string;
+  status: string;
+  timestamp?: string;
+  details?: Record<string, unknown>;
+}) {
+  const payload = HealthStatusEventSchema.parse({
+    type: "HealthStatus",
+    module: params.moduleName,
+    status: params.status,
+    timestamp: params.timestamp ?? new Date().toISOString(),
+    ...(params.details ? { details: params.details } : {}),
+  });
+  params.nc.publish(
+    healthStatusSubjectFor(params.moduleName),
+    params.sc.encode(JSON.stringify(payload))
+  );
 }
 
 async function ensureContextStorage(
@@ -418,16 +490,77 @@ async function main() {
     console.log(`[worker] discovered modules: ${modules.map((m) => m.name).join(", ") || "(none)"}`);
 
     const runtimeByModule = new Map<string, ModuleRuntime>();
+    const moduleHealthByName = new Map<string, ModuleHealthState>();
+    const updateModuleHealth = (
+      moduleName: string,
+      status: string,
+      details?: Record<string, unknown>,
+      timestamp?: string
+    ) => {
+      const at = timestamp ?? new Date().toISOString();
+      const normalizedDetails = details ?? {};
+      moduleHealthByName.set(moduleName, {
+        status,
+        details: normalizedDetails,
+        updatedAt: at,
+      });
+      publishHealthStatus({
+        nc,
+        sc,
+        moduleName,
+        status,
+        timestamp: at,
+        details: normalizedDetails,
+      });
+    };
     for (const m of modules) {
       const entry = m.runtime?.entry;
       if (!entry) {
         // eslint-disable-next-line no-console
         console.log(`[worker] module ${m.name} has no runtime.entry; skipping runtime load`);
+        updateModuleHealth(m.name, "skipped", { phase: "runtime_missing" });
         continue;
       }
-      const rt = await loadModuleRuntime({ modulesDir: MODULES_DIR, moduleName: m.name, runtimeEntry: entry });
-      runtimeByModule.set(m.name, rt);
+      try {
+        const rt = await loadModuleRuntime({ modulesDir: MODULES_DIR, moduleName: m.name, runtimeEntry: entry });
+        runtimeByModule.set(m.name, rt);
+        updateModuleHealth(m.name, "ready", { phase: "runtime_loaded" });
+      } catch (err) {
+        publishLog(nc, sc, "error", "module runtime load failed", {
+          moduleName: m.name,
+          err: serializeError(err),
+        });
+        updateModuleHealth(m.name, "error", {
+          phase: "runtime_load",
+          error: serializeError(err),
+        });
+      }
     }
+
+    const heartbeatSecondsRaw = Number(process.env.FEED_HEALTH_HEARTBEAT_SECONDS ?? DEFAULT_HEALTH_HEARTBEAT_SECONDS);
+    const heartbeatSeconds =
+      Number.isFinite(heartbeatSecondsRaw) && heartbeatSecondsRaw > 0
+        ? heartbeatSecondsRaw
+        : DEFAULT_HEALTH_HEARTBEAT_SECONDS;
+    const heartbeatTimer = setInterval(() => {
+      const heartbeatAt = new Date().toISOString();
+      for (const [moduleName, state] of moduleHealthByName.entries()) {
+        publishHealthStatus({
+          nc,
+          sc,
+          moduleName,
+          status: state.status,
+          timestamp: heartbeatAt,
+          details: {
+            ...(state.details ?? {}),
+            heartbeat: true,
+            state_updated_at: state.updatedAt,
+            heartbeat_interval_seconds: heartbeatSeconds,
+          },
+        });
+      }
+    }, heartbeatSeconds * 1000);
+    heartbeatTimer.unref?.();
 
     const baseCtx: Omit<ModuleRuntimeContext, "moduleName" | "getQueue"> = {
       modulesDir: MODULES_DIR,
@@ -435,6 +568,8 @@ async function main() {
       nats: nc as any,
       sc: sc as any,
       fetchInternalSettings: fetchSettings,
+      emitIngestRejected: () => {},
+      emitHealthStatus: () => {},
     };
 
     const makeCtx = (moduleName: string): ModuleRuntimeContext => ({
@@ -454,6 +589,20 @@ async function main() {
             });
           },
         }) as any,
+      emitIngestRejected: (params) =>
+        publishIngestRejected({
+          nc,
+          sc,
+          moduleName,
+          ...params,
+        }),
+      emitHealthStatus: (params) =>
+        updateModuleHealth(
+          moduleName,
+          params.status,
+          params.details,
+          params.timestamp
+        ),
     });
 
     // Schedule repeat jobs declared by modules.
@@ -485,6 +634,12 @@ async function main() {
               queue: job.queue,
               err: serializeError(err),
             });
+            updateModuleHealth(mod.name, "error", {
+              phase: "schedule_error",
+              job: job.name,
+              queue: job.queue,
+              error: serializeError(err),
+            });
           },
         });
       }
@@ -503,8 +658,9 @@ async function main() {
       const sub = nc.subscribe(s.subject);
       (async () => {
         for await (const m of sub) {
+          const rawText = sc.decode(m.data);
           try {
-            const raw = JSON.parse(sc.decode(m.data)) as unknown;
+            const raw = JSON.parse(rawText) as unknown;
             // Support both payload shapes:
             // - NormalizedMessage
             // - { type: "MessageCreated", message: NormalizedMessage }
@@ -526,6 +682,20 @@ async function main() {
             // eslint-disable-next-line no-console
             console.error("[worker] failed to enqueue triggered job", err);
             publishLog(nc, sc, "error", "failed to enqueue triggered job", err);
+            publishIngestRejected({
+              nc,
+              sc,
+              moduleName: s.moduleName,
+              reason: "trigger_payload_invalid",
+              source_subject: s.subject,
+              stage: "job_trigger_enqueue",
+              details: {
+                error: serializeError(err),
+                payload_preview: rawText.slice(0, 500),
+                queue: s.queue,
+                job: s.jobName,
+              },
+            });
           }
         }
       })().catch((err) => {
@@ -543,13 +713,18 @@ async function main() {
           const raw = JSON.parse(sc.decode(m.data)) as unknown;
           const env = JobRunEventSchema.parse(raw);
           const runId = env.runId ?? crypto.randomUUID();
+          const trigger: JobTrigger = {
+            type: env.trigger.type,
+            ...(env.trigger.subject ? { subject: env.trigger.subject } : {}),
+            ...(env.trigger.messageId ? { messageId: env.trigger.messageId } : {}),
+          };
           await recordJobStart({
             db,
             runId,
             moduleName: env.module,
             queue: env.queue,
             jobName: env.job,
-            trigger: env.trigger,
+            trigger,
           });
 
           const rt = runtimeByModule.get(env.module);
@@ -568,6 +743,14 @@ async function main() {
               : {};
           const metricsJson = { durationMs, ...metrics };
           await recordJobSuccess({ db, runId, moduleName: env.module, jobName: env.job, metricsJson });
+          updateModuleHealth(env.module, "ok", {
+            phase: "job_success",
+            queue: env.queue,
+            job: env.job,
+            run_id: runId,
+            trigger_type: env.trigger.type,
+            metrics: metricsJson,
+          });
         } catch (err) {
           const message = serializeError(err);
           publishLog(nc, sc, "error", "job failed", { err: message });
@@ -577,6 +760,14 @@ async function main() {
             if (env.success) {
               const runId = env.data.runId ?? crypto.randomUUID();
               await recordJobError({ db, runId, moduleName: env.data.module, jobName: env.data.job, error: message });
+              updateModuleHealth(env.data.module, "error", {
+                phase: "job_error",
+                queue: env.data.queue,
+                job: env.data.job,
+                run_id: runId,
+                trigger_type: env.data.trigger.type,
+                error: message,
+              });
             }
           } catch {
             // ignore
@@ -592,21 +783,34 @@ async function main() {
     const contextSub = nc.subscribe(CONTEXT_SUBJECT_WILDCARD);
     (async () => {
       for await (const m of contextSub) {
+        const rawText = sc.decode(m.data);
         try {
-          const raw = JSON.parse(sc.decode(m.data)) as unknown;
+          const raw = JSON.parse(rawText) as unknown;
           const env = ContextUpdatedEventSchema.parse(raw);
           await upsertContext({
             db,
             ownerModule: env.context.ownerModule,
-            sourceKey: env.context.sourceKey,
             summaryShort: env.context.summaryShort,
             summaryLong: env.context.summaryLong,
             keyPoints: env.context.keyPoints ?? [],
-            embedding: env.context.embedding,
-            messageId: env.messageId,
+            ...(env.context.sourceKey ? { sourceKey: env.context.sourceKey } : {}),
+            ...(env.context.embedding ? { embedding: env.context.embedding } : {}),
+            ...(env.messageId ? { messageId: env.messageId } : {}),
           });
         } catch (err) {
           publishLog(nc, sc, "warn", "failed to apply context update", { err: serializeError(err) });
+          publishIngestRejected({
+            nc,
+            sc,
+            moduleName: inferModuleNameFromSubject((m as any).subject),
+            reason: "context_update_invalid",
+            source_subject: (m as any).subject,
+            stage: "context_apply",
+            details: {
+              error: serializeError(err),
+              payload_preview: rawText.slice(0, 500),
+            },
+          });
         }
       }
     })().catch((err) => {
@@ -676,5 +880,3 @@ main().catch((err) => {
   console.error("[worker] fatal", err);
   process.exit(1);
 });
-
-

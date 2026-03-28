@@ -21,7 +21,7 @@ export function createModuleRuntime(): ModuleRuntime {
     moduleName: "system",
     handlers: {
       mod_system: {
-        async ollamaDebug() {
+        async aiDebug() {
           const apiBaseUrl = (process.env.FEED_API_BASE_URL ?? "http://localhost:4000").replace(/\/+$/, "");
           const internalToken = process.env.FEED_INTERNAL_TOKEN ?? "";
           if (!internalToken) throw new Error("Missing FEED_INTERNAL_TOKEN");
@@ -40,18 +40,19 @@ export function createModuleRuntime(): ModuleRuntime {
           }
 
           try {
-            await fetchJsonPost(`${apiBaseUrl}/api/internal/ai/summary`, internalToken, { prompt: "Ollama debug ping" });
+            await fetchJsonPost(`${apiBaseUrl}/api/internal/ai/summary`, internalToken, { prompt: "AI debug ping" });
             summaryOk = true;
           } catch (err) {
             summaryError = err instanceof Error ? err.message : String(err);
           }
 
           try {
-            await fetchJsonPost(`${apiBaseUrl}/api/internal/ai/embedding`, internalToken, { text: "Ollama debug ping" });
+            await fetchJsonPost(`${apiBaseUrl}/api/internal/ai/embedding`, internalToken, { text: "AI debug ping" });
             embedOk = true;
           } catch (err) {
             embedError = err instanceof Error ? err.message : String(err);
           }
+
           return {
             metrics: {
               tags,

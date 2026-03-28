@@ -30,7 +30,8 @@ services:
       FEED_SETTINGS_KEY: ${FEED_SETTINGS_KEY:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
       FEED_MODULES_DIR: /app/modules
       FEED_INTERNAL_TOKEN: ${FEED_INTERNAL_TOKEN:-dev-internal-token}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_EMBED_BASE_URL: ${AI_EMBED_BASE_URL:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -49,7 +50,9 @@ services:
       FEED_MODULES_DIR: /app/modules
       FEED_INTERNAL_TOKEN: ${FEED_INTERNAL_TOKEN:-dev-internal-token}
       FEED_API_BASE_URL: ${FEED_API_BASE_URL:-http://api:4000}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_EMBED_BASE_URL: ${AI_EMBED_BASE_URL:-}
+      AI_EMBED_DIM: ${AI_EMBED_DIM:-768}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

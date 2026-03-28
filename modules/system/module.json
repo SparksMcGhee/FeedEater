@@ -6,9 +6,9 @@
   "queues": ["mod_system"],
   "jobs": [
     {
-      "name": "ollamaDebug",
+      "name": "aiDebug",
       "queue": "mod_system",
-      "description": "Fetch Ollama tags and report models/health metrics."
+      "description": "Probe both AI endpoints (summary and embed) and report health metrics."
     }
   ],
   "settings": [
@@ -22,10 +22,20 @@
     { "key": "dashboard_contexts_limit", "type": "number", "default": 200 },
     { "key": "dashboard_contexts_filter_module", "type": "string", "default": "" },
     { "key": "dashboard_contexts_search", "type": "string", "default": "" },
+    { "key": "ai_base_url", "type": "string", "default": "" },
+    { "key": "ai_summary_model", "type": "string", "default": "Qwen/Qwen3-Coder-Next-FP8" },
+    { "key": "ai_api_key", "type": "string", "default": "" },
+    { "key": "ai_embed_base_url", "type": "string", "default": "" },
+    { "key": "ai_embed_model", "type": "string", "default": "BAAI/bge-base-en-v1.5" },
+    { "key": "ai_embed_dim", "type": "number", "default": 768 },
+    { "key": "ai_burst_enabled", "type": "boolean", "default": false },
+    { "key": "ai_burst_base_url", "type": "string", "default": "https://api.together.xyz/v1" },
+    { "key": "ai_burst_api_key", "type": "string", "default": "" },
+    { "key": "ai_burst_summary_model", "type": "string", "default": "Qwen/Qwen3-Coder-Next-FP8" },
     { "key": "ollama_base_url", "type": "string", "default": "" },
-    { "key": "ollama_summary_model", "type": "string", "default": "llama3.1:8b" },
-    { "key": "ollama_embed_model", "type": "string", "default": "llama3.1:8b" },
-    { "key": "ollama_embed_dim", "type": "number", "default": 4096 },
+    { "key": "ollama_summary_model", "type": "string", "default": "" },
+    { "key": "ollama_embed_model", "type": "string", "default": "" },
+    { "key": "ollama_embed_dim", "type": "number", "default": 768 },
     { "key": "context_top_k", "type": "number", "default": 20 },
     { "key": "dashboard_show_ids", "type": "boolean", "default": false }
   ],

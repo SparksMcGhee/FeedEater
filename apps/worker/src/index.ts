@@ -57,7 +57,7 @@ const NATS_URL = requiredEnv("NATS_URL");
 const MODULES_DIR = process.env.FEED_MODULES_DIR ?? "/app/modules";
 const API_BASE_URL = process.env.FEED_API_BASE_URL ?? "http://localhost:4000";
 const INTERNAL_TOKEN = requiredEnv("FEED_INTERNAL_TOKEN");
-const DEFAULT_EMBED_DIM = Number(process.env.OLLAMA_EMBED_DIM ?? "4096");
+const DEFAULT_EMBED_DIM = Number(process.env.AI_EMBED_DIM ?? process.env.OLLAMA_EMBED_DIM ?? "768");
 let currentEmbedDim = DEFAULT_EMBED_DIM;
 
 requiredEnv("DATABASE_URL");
@@ -405,7 +405,7 @@ async function main() {
     };
 
     const sysSettings = await fetchSettings("system");
-    const sysEmbedDimRaw = sysSettings.ollama_embed_dim ?? DEFAULT_EMBED_DIM;
+    const sysEmbedDimRaw = sysSettings.ai_embed_dim ?? sysSettings.ollama_embed_dim ?? DEFAULT_EMBED_DIM;
     const sysEmbedDim = Number.isFinite(Number(sysEmbedDimRaw)) ? Number(sysEmbedDimRaw) : DEFAULT_EMBED_DIM;
     currentEmbedDim = sysEmbedDim;
     await ensureContextStorage(db, (level, message, meta) => publishLog(nc, sc, level, message, meta), sysEmbedDim);

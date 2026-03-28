@@ -3,8 +3,12 @@
   become: true
   vars:
     feedeater_root: /opt/feedeater
+    feedeater_env:
+      FEED_SETTINGS_KEY: "{{ lookup('env', 'FEED_SETTINGS_KEY') }}"
+      FEED_INTERNAL_TOKEN: "{{ lookup('env', 'FEED_INTERNAL_TOKEN') }}"
+      AI_BASE_URL: "http://host.docker.internal:8888/v1"
+      AI_EMBED_BASE_URL: "http://host.docker.internal:8889/v1"
+      AI_EMBED_DIM: "768"
   roles:
     - docker
     - feedeater
-
-

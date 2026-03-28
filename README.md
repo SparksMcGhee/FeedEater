@@ -21,7 +21,7 @@ FeedEater makes it easy to collect, aggriate, process, and filter feeds like new
 - **External intergration**: Jobs may make external API calls 
 - **Unified Message Bus**: All modules can read and emit messages on a unified, persistant, and realtime message bus.
 - **Collabrative understanding**: Modules can collaborate on a shared understanding of those messages by emitting key-value tags on any message (not just theirs)
-- **AI all warmed up**: Modules are provided system endpoints for interacting with OLLAMA. No fussing with API keys, networking, sidecar services, pulling stuff from HuggingFace or waiting for models to load. FeedEater will even handle task queueing. 
+- **AI all warmed up**: Modules are provided system endpoints for interacting with a vLLM backend (OpenAI-compatible). No fussing with API keys, networking, sidecar services, or waiting for models to load. FeedEater abstracts the summary and embedding endpoints and can optionally route summary requests to a cloud provider (burst mode). 
 - **Free Logging**: FeedEater logs and monitors jobs as well as providing a unified realtime debug log accessible from the UI. 
 - **Free Settings**: FeedEater handles exposing module settings to the end-user via the web interface as well as securely and persistantly storing settings values.  
 - **Free UI**: Modules may expand their settings page by defining their own TypeScript cards for any additional interoperability, as well as defining the card which is displayed when a user clicks on one of it's messages. 
@@ -40,6 +40,47 @@ Our natural desire for knowledge and closeness is, like hunger, is rooted in the
 Then, in the same evolutionary blink of the eye the whole game changed. Suddenly the Internet allowed us to pump all of humanitites knowledge along with every baniel thought and cat picture directly into our eyeballs 24/7/365. Suddenly becoming wise, informed, and healthy required careful information dieting. 
 
 Since Facebook, Twitter, Tik-Toc, Bluesky, Mastadon, RSS feeds, Slack, Discord, IRC, SMS, Signal, Telegram, WeChat, Email.... appear to have collectively decided that pumping volumes of unhealthy and outright dangerious information into our eyeballs is more prophetable we're going to have to take matters into our own hands. 
+
+## 🚀 Deploying FeedEater
+
+### Prerequisites
+- Ansible installed locally (`pip install ansible`)
+- Docker + Docker Compose on the target host
+- A vLLM instance serving a generative model (port 8888) and an embedding model (port 8889), both on the OpenAI-compatible `/v1` API
+
+### First-time setup
+
+1. **Copy the example env file** and fill in all values:
+   ```bash
+   cp .env.example .env   # or create .env from scratch
+   ```
+
+2. **Generate persistent secrets** — do this once and never regenerate them:
+   ```bash
+   # FEED_SETTINGS_KEY — encrypts module secrets stored in the database
+   python3 -c "import os,base64; print('FEED_SETTINGS_KEY=' + base64.b64encode(os.urandom(32)).decode())"
+
+   # FEED_INTERNAL_TOKEN — authenticates internal API calls (worker → API)
+   python3 -c "import os,base64; print('FEED_INTERNAL_TOKEN=' + base64.b64encode(os.urandom(32)).decode())"
+   ```
+   Add both values to your local `.env`.
+
+3. **Set your vLLM URLs** in `.env`:
+   ```
+   AI_BASE_URL=http://<your-host>:8888/v1
+   AI_EMBED_BASE_URL=http://<your-host>:8889/v1
+   AI_EMBED_DIM=768
+   ```
+
+4. **Deploy:**
+   ```bash
+   make deploy
+   ```
+   This sources `.env`, exports all variables into the shell, and runs the Ansible playbook. Ansible reads `FEED_SETTINGS_KEY` and `FEED_INTERNAL_TOKEN` from the environment and writes them to the server's `.env`  — keeping your local `.env` as the single source of truth.
+
+> ⚠️ **Key safety:** `FEED_SETTINGS_KEY` encrypts sensitive settings (bot tokens, API keys) stored in the database. If you ever need to rotate it, you must first clear all encrypted values from the `Setting` table in Postgres, or the API will crash on startup. Back up your `.env` and treat `FEED_SETTINGS_KEY` like a database master password.
+
+---
 
 ## 🤝 Contributing
 

@@ -1,9 +1,11 @@
 # This file contains instructions for AI Agents contributing to the FeedEater project
 
 ### Non-negotiables
-- **Do not modify** `agentinstructions.md`.
-- **Remember this** always re-read `agentinstructions.md` back into context before making changes. 
+- **Do not modify** `agent.md`.
+- **Remember this** always re-read `agent.md` back into context before making changes. 
+- **Prefix responses** prefix all responses to humans with 🤖 to verify agent.md is in-context
 - **No secrets in git**: all secrets/config via `.env` and module settings; ensure `.env` is gitignored.
+- **Never regenerate `FEED_SETTINGS_KEY`** unless you first clear all encrypted values from the `Setting` table. A key mismatch causes an API crash on startup.
 - **Docker-first**: everything must run via `docker-compose`.
 - **Re-deployable**: changes must be safe to apply repeatedly on an AI-ready Unix server like a DJX Spark (idempotent deploy + migrations).
 - **TypeScript strict**: keep strict mode enabled; avoid `any`.
@@ -63,12 +65,16 @@ Each module MAY
 - persist private data in its own Postgres schema (optional Prisma schema or SQL migrations)
 
 ### Using AI
-- The system ensures an OLLAMA model is accessible to all modules and abstracts away networking/auth.
-- A single OLLAMA model is set system-wide to ensure the model can be kept in VRAM when hosting on local hardware and that all embeds are compatible across modules. 
-- Modules are responsible for building prompts and interperating the responses 
-- System endpoints for AI are: 
-    - ```/api/internal/ai/summary```
-    - ```/api/internal/ai/embedding```
+- The system ensures a vLLM instance (OpenAI-compatible API) is accessible to all modules and abstracts away networking and auth.
+- Two model endpoints are configured system-wide via the `system` module settings:
+  - **Summary endpoint** (`ai_base_url` + `ai_summary_model`): a generative model (e.g. `Qwen/Qwen3-Coder-Next-FP8`) for context summaries and structured output.
+  - **Embed endpoint** (`ai_embed_base_url` + `ai_embed_model`): a dedicated embedding model (e.g. `BAAI/bge-base-en-v1.5`, 768 dims) for semantic search.
+- Keeping both models system-wide ensures embed vectors are dimension-compatible across all modules.
+- **Cloud burst** (`ai_burst_enabled`, `ai_burst_base_url`, `ai_burst_api_key`, `ai_burst_summary_model`): when toggled on in system settings, summary requests are routed to an external provider (e.g. Together AI). Embeddings always stay local.
+- Modules are responsible for building prompts and interpreting responses.
+- System endpoints for AI are:
+    - `/api/internal/ai/summary`
+    - `/api/internal/ai/embedding`
 
 ### Interop contract
 - Modules must not directly call each other or write in each-other’s schemas.
@@ -78,6 +84,33 @@ Each module MAY
   - tags (key/value) for enrichment and routing
 
 ### Deployment requirements
-- Must be deployable with **Make and/or Ansible**.
+- Must be deployable with **`make deploy`** (the canonical command) and/or Ansible directly.
 - Production runs fully under `docker-compose` behind a reverse proxy so the UI is a **single pane of glass**.
 - Any server configuration changes must be represented in Ansible playbooks/roles.
+
+### Deployment workflow and key safety
+
+**The local `.env` file is the single source of truth for deployment secrets.** It is gitignored and must never be committed.
+
+The `.env` must contain:
+```
+FEED_SETTINGS_KEY=<base64-encoded 32-byte key>
+FEED_INTERNAL_TOKEN=<random token>
+AI_BASE_URL=<vLLM summary endpoint, e.g. http://spark-ddb1.tailbdd59.ts.net:8888/v1>
+AI_EMBED_BASE_URL=<vLLM embed endpoint, e.g. http://spark-ddb1.tailbdd59.ts.net:8889/v1>
+AI_EMBED_DIM=768
+```
+
+Generate `FEED_SETTINGS_KEY` once, store it in `.env`, and **never regenerate it** without first migrating or clearing all encrypted settings from the `Setting` table. The key encrypts module secrets (e.g. bot tokens) stored in the database. If the key changes without clearing encrypted values, the API will crash at startup with `Unsupported state or unable to authenticate data`.
+
+Generate the key:
+```bash
+python3 -c "import os,base64; print(base64.b64encode(os.urandom(32)).decode())"
+```
+
+Deploy:
+```bash
+make deploy   # sources .env, exports all vars, runs ansible-playbook
+```
+
+**Never** call `ansible-playbook` with `-e '{"feedeater_env": {...}}'`. Ansible extra-vars have the highest precedence and cannot be overridden by `set_fact`, which will cause the secrets combine in the role to silently fail and drop `FEED_SETTINGS_KEY` from the server's `.env`.

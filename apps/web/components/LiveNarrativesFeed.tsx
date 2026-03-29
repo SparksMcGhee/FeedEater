@@ -32,7 +32,7 @@ function renderMessageText(text: string) {
   return parts.length ? <>{parts}</> : text;
 }
 
-type ContextItem = {
+type NarrativeItem = {
   id: string;
   ownerModule: string;
   sourceKey: string;
@@ -45,26 +45,26 @@ type ContextItem = {
   messageCount: number;
 };
 
-type ContextStreamEnvelope = {
+type NarrativeStreamEnvelope = {
   subject: string;
   receivedAt: string;
   messageId: string | null;
-  context: ContextItem;
+  narrative: NarrativeItem;
 };
 
-type ContextHistoryResponse =
-  | { ok: true; sinceMinutes: number; limit: number; items: ContextItem[] }
+type NarrativeHistoryResponse =
+  | { ok: true; sinceMinutes: number; limit: number; items: NarrativeItem[] }
   | { ok: false; error: string };
 
-type ContextMessagesResponse =
-  | { ok: true; context: ContextItem; messages: Array<{ id: string; createdAt: string; raw: unknown }> }
+type NarrativeMessagesResponse =
+  | { ok: true; narrative: NarrativeItem; messages: Array<{ id: string; createdAt: string; raw: unknown }> }
   | { ok: false; error: string };
 
 type SettingsResponse = { module: string; settings: Array<{ key: string; isSecret: boolean; value: string | null }> };
 type ModulesResponse = { modules: Array<{ name: string }> };
 
-export function LiveContextsFeed() {
-  const [items, setItems] = useState<ContextItem[]>([]);
+export function LiveNarrativesFeed() {
+  const [items, setItems] = useState<NarrativeItem[]>([]);
   const [status, setStatus] = useState<"connecting" | "open" | "closed" | "error">("connecting");
   const [modules, setModules] = useState<string[]>([]);
 
@@ -104,10 +104,10 @@ export function LiveContextsFeed() {
       if (sysRes.ok) {
         const data = (await sysRes.json()) as SettingsResponse;
         const byKey = new Map((data.settings ?? []).map((s) => [s.key, s.value ?? ""]));
-        const hm = Number(byKey.get("dashboard_contexts_history_minutes") ?? "60");
-        const lim = Number(byKey.get("dashboard_contexts_limit") ?? "200");
-        const mod = String(byKey.get("dashboard_contexts_filter_module") ?? "");
-        const q = String(byKey.get("dashboard_contexts_search") ?? "");
+        const hm = Number(byKey.get("dashboard_narratives_history_minutes") ?? "60");
+        const lim = Number(byKey.get("dashboard_narratives_limit") ?? "200");
+        const mod = String(byKey.get("dashboard_narratives_filter_module") ?? "");
+        const q = String(byKey.get("dashboard_narratives_search") ?? "");
         const show = String(byKey.get("dashboard_show_ids") ?? "false");
         if (Number.isFinite(hm) && hm >= 0) setHistoryMinutes(hm);
         if (Number.isFinite(lim) && lim > 0) setLimit(lim);
@@ -124,18 +124,18 @@ export function LiveContextsFeed() {
     setLoadingHistory(true);
     setHistoryError(null);
     try {
-      const url = new URL("/api/contexts/history", window.location.origin);
+      const url = new URL("/api/narratives/history", window.location.origin);
       url.searchParams.set("sinceMinutes", String(historyMinutes));
       url.searchParams.set("limit", String(limit));
       if (filterModule.trim()) url.searchParams.set("module", filterModule.trim());
       if (search.trim()) url.searchParams.set("q", search.trim());
 
       const res = await fetch(url.toString(), { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as ContextHistoryResponse | null;
+      const json = (await res.json().catch(() => null)) as NarrativeHistoryResponse | null;
       if (!res.ok || !json) throw new Error(`History failed (${res.status})`);
       if (!json.ok) throw new Error(json.error);
 
-      const next: ContextItem[] = [];
+      const next: NarrativeItem[] = [];
       const seen = new Set<string>();
       for (const c of json.items ?? []) {
         if (!c?.id || seen.has(c.id)) continue;
@@ -158,10 +158,10 @@ export function LiveContextsFeed() {
 
   useEffect(() => {
     void loadHistory();
-    void saveSetting("dashboard_contexts_history_minutes", String(historyMinutes));
-    void saveSetting("dashboard_contexts_limit", String(limit));
-    void saveSetting("dashboard_contexts_filter_module", filterModule);
-    void saveSetting("dashboard_contexts_search", search);
+    void saveSetting("dashboard_narratives_history_minutes", String(historyMinutes));
+    void saveSetting("dashboard_narratives_limit", String(limit));
+    void saveSetting("dashboard_narratives_filter_module", filterModule);
+    void saveSetting("dashboard_narratives_search", search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyMinutes, limit, filterModule, search]);
 
@@ -171,29 +171,29 @@ export function LiveContextsFeed() {
   }, [showIds]);
 
   useEffect(() => {
-    const es = new EventSource("/api/contexts/stream");
+    const es = new EventSource("/api/narratives/stream");
     es.onopen = () => setStatus("open");
     es.onerror = () => setStatus("error");
 
-    es.addEventListener("context", (evt) => {
+    es.addEventListener("narrative", (evt) => {
       try {
-        const parsed = JSON.parse((evt as MessageEvent).data) as ContextStreamEnvelope;
-        const ctx = parsed?.context;
-        if (!ctx?.id) return;
+        const parsed = JSON.parse((evt as MessageEvent).data) as NarrativeStreamEnvelope;
+        const nv = parsed?.narrative;
+        if (!nv?.id) return;
 
-        if (filterModule && ctx.ownerModule !== filterModule) return;
+        if (filterModule && nv.ownerModule !== filterModule) return;
         if (search) {
           const q = search.toLowerCase();
-          const hay = `${ctx.summaryShort}\n${ctx.summaryLong}`.toLowerCase();
+          const hay = `${nv.summaryShort}\n${nv.summaryLong}`.toLowerCase();
           if (!hay.includes(q)) return;
         }
 
         setItems((prev) => {
-          const next = prev.filter((p) => p.id !== ctx.id);
-          next.unshift(ctx);
+          const next = prev.filter((p) => p.id !== nv.id);
+          next.unshift(nv);
           return next.slice(0, Math.max(200, limit));
         });
-        seenIdsRef.current.add(ctx.id);
+        seenIdsRef.current.add(nv.id);
       } catch {
         // ignore
       }
@@ -205,18 +205,18 @@ export function LiveContextsFeed() {
     };
   }, [filterModule, search, limit]);
 
-  async function toggleMessages(context: ContextItem) {
-    const id = context.id;
+  async function toggleMessages(narrative: NarrativeItem) {
+    const id = narrative.id;
     setExpanded((p) => ({ ...p, [id]: !p[id] }));
     if (messagesById[id] || messagesLoading[id]) return;
 
     setMessagesLoading((p) => ({ ...p, [id]: true }));
     setMessagesError((p) => ({ ...p, [id]: "" }));
     try {
-      const url = new URL("/api/contexts/messages", window.location.origin);
-      url.searchParams.set("contextId", id);
+      const url = new URL("/api/narratives/messages", window.location.origin);
+      url.searchParams.set("narrativeId", id);
       const res = await fetch(url.toString(), { cache: "no-store" });
-      const json = (await res.json().catch(() => null)) as ContextMessagesResponse | null;
+      const json = (await res.json().catch(() => null)) as NarrativeMessagesResponse | null;
       if (!res.ok || !json) throw new Error(`Messages failed (${res.status})`);
       if (!json.ok) throw new Error(json.error);
       setMessagesById((p) => ({ ...p, [id]: json.messages }));
@@ -228,10 +228,10 @@ export function LiveContextsFeed() {
   }
 
   const header = useMemo(() => {
-    if (status === "open") return "Live Contexts";
-    if (status === "connecting") return "Live Contexts (connecting…)";
-    if (status === "error") return "Live Contexts (error)";
-    return "Live Contexts (closed)";
+    if (status === "open") return "Live Narratives";
+    if (status === "connecting") return "Live Narratives (connecting…)";
+    if (status === "error") return "Live Narratives (error)";
+    return "Live Narratives (closed)";
   }, [status]);
 
   return (
@@ -239,7 +239,7 @@ export function LiveContextsFeed() {
       <div style={{ fontSize: 20, fontWeight: 700 }}>{header}</div>
       <div style={{ height: 10 }} />
       <div className="muted" style={{ marginBottom: 12 }}>
-        Showing history from Postgres + streaming <code>feedeater.*.contextUpdated</code> from NATS via SSE.
+        Showing history from Postgres + streaming <code>feedeater.*.narrativeUpdated</code> from NATS via SSE.
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
@@ -286,8 +286,8 @@ export function LiveContextsFeed() {
       ) : null}
 
       <div style={{ display: "grid", gap: 10 }}>
-        {items.map((ctx) => {
-          const id = ctx.id;
+        {items.map((nv) => {
+          const id = nv.id;
           const open = Boolean(expanded[id]);
           const msgLoading = Boolean(messagesLoading[id]);
           const msgError = messagesError[id] ?? "";
@@ -296,27 +296,27 @@ export function LiveContextsFeed() {
           return (
             <div key={id} style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-                <div style={{ fontWeight: 700 }}>{ctx.summaryShort || "(no summary)"}</div>
+                <div style={{ fontWeight: 700 }}>{nv.summaryShort || "(no summary)"}</div>
                 <div className="muted" style={{ fontSize: 12 }}>
-                  {ctx.ownerModule} · {new Date(ctx.updatedAt).toLocaleString()} · messages: {ctx.messageCount}
+                  {nv.ownerModule} · {new Date(nv.updatedAt).toLocaleString()} · messages: {nv.messageCount}
                 </div>
               </div>
 
               <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-                sourceKey: <code>{ctx.sourceKey}</code> · version: {ctx.version}
+                sourceKey: <code>{nv.sourceKey}</code> · version: {nv.version}
                 {showIds ? (
                   <>
                     {" "}
-                    · contextId: <code>{ctx.id}</code>
+                    · narrativeId: <code>{nv.id}</code>
                   </>
                 ) : null}
               </div>
 
-              <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{ctx.summaryLong}</div>
+              <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{nv.summaryLong}</div>
 
               <div style={{ marginTop: 10 }}>
                 <button
-                  onClick={() => void toggleMessages(ctx)}
+                  onClick={() => void toggleMessages(nv)}
                   style={{
                     padding: "8px 10px",
                     borderRadius: 10,
@@ -341,7 +341,7 @@ export function LiveContextsFeed() {
                     <div style={{ fontSize: 12, color: "rgba(255,120,120,0.9)" }}>{msgError}</div>
                   ) : msgs.length === 0 ? (
                     <div className="muted" style={{ fontSize: 12 }}>
-                      No messages linked to this Context.
+                      No messages linked to this narrative.
                     </div>
                   ) : (
                     <div style={{ display: "grid", gap: 8 }}>

@@ -4,20 +4,20 @@ Feedeater's name is literal: it's a backplane and an engine for tools that munch
 
 It's a backplane to unite an ecosystem of lightweight and modular tools that empowers people to assemble their own darn newsfeeds policed and moderated by their own darn algorythms (blackjack and hookers optional).
 
-# Context is King
-Rather then rigied and archaic system-specific concepts like "threads" or "topics" or "channels" or "conversations" or "Hashtags", Feedeater's unified data model groups messages by "Contexts". 
+# Narrative is King
+Rather then rigied and archaic system-specific concepts like "threads" or "topics" or "channels" or "conversations" or "Hashtags", Feedeater's unified data model groups messages by **Narratives** (evolving conversation rollups — not LLM prompt context).
 
-**Contexts allow deep knowedge**: FeedEater tracks AI summaries and semantic embeds for messages in a given context. This allows both humans any any sorting/filtering/monitoring processes to understand a given message at a much deeper level.
+**Narratives allow deep knowedge**: FeedEater tracks AI summaries and semantic embeds for messages in a given narrative. This allows both humans any any sorting/filtering/monitoring processes to understand a given message at a much deeper level.
 
-**Contexts may span platforms**: FeedEater allows the tracking of topics and conversations across platforms by allowing messages and information coming from diffent systems to be related to the same context. 
+**Narratives may span platforms**: FeedEater allows the tracking of topics and conversations across platforms by allowing messages and information coming from diffent systems to be related to the same narrative. 
 
-**Contexts allow deep control**: [future feature] FeedEater allows feed filtering and monitoring (job triggering) based on semantic search. 
+**Narratives allow deep control**: [future feature] FeedEater allows feed filtering and monitoring (job triggering) based on semantic search. 
 
 # Batteries Included Platform
 FeedEater makes it easy to collect, aggriate, process, and filter feeds like news, chats, message, and notifications by providing unified data structures and support services: 
 
 - **Drop-in installs**: FeedEater will automatically import and integrate with any module cloned into its /modules folder (see an [example module](https://github.com/SparksMcGhee/FeedEater/tree/main/modules/example)).
-- **Free Orchestration**: Modules may define jobs which FeedEater will invoke either on a schedule, based on message/context subscription rules, or based on button presses in the web interface.  
+- **Free Orchestration**: Modules may define jobs which FeedEater will invoke either on a schedule, based on message/narrative subscription rules, or based on button presses in the web interface.  
 - **External intergration**: Jobs may make external API calls 
 - **Unified Message Bus**: All modules can read and emit messages on a unified, persistant, and realtime message bus.
 - **Collabrative understanding**: Modules can collaborate on a shared understanding of those messages by emitting key-value tags on any message (not just theirs)

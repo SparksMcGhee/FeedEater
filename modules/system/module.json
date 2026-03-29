@@ -18,10 +18,10 @@
     { "key": "dashboard_bus_filter_module", "type": "string", "default": "" },
     { "key": "dashboard_bus_filter_stream", "type": "string", "default": "" },
     { "key": "dashboard_bus_search", "type": "string", "default": "" },
-    { "key": "dashboard_contexts_history_minutes", "type": "number", "default": 60 },
-    { "key": "dashboard_contexts_limit", "type": "number", "default": 200 },
-    { "key": "dashboard_contexts_filter_module", "type": "string", "default": "" },
-    { "key": "dashboard_contexts_search", "type": "string", "default": "" },
+    { "key": "dashboard_narratives_history_minutes", "type": "number", "default": 60 },
+    { "key": "dashboard_narratives_limit", "type": "number", "default": 200 },
+    { "key": "dashboard_narratives_filter_module", "type": "string", "default": "" },
+    { "key": "dashboard_narratives_search", "type": "string", "default": "" },
     { "key": "ai_base_url", "type": "string", "default": "" },
     { "key": "ai_summary_model", "type": "string", "default": "Qwen/Qwen3-Coder-Next-FP8" },
     { "key": "ai_api_key", "type": "string", "default": "" },
@@ -36,12 +36,11 @@
     { "key": "ollama_summary_model", "type": "string", "default": "" },
     { "key": "ollama_embed_model", "type": "string", "default": "" },
     { "key": "ollama_embed_dim", "type": "number", "default": 768 },
-    { "key": "context_top_k", "type": "number", "default": 20 },
+    { "key": "narrative_top_k", "type": "number", "default": 20 },
     { "key": "dashboard_show_ids", "type": "boolean", "default": false }
   ],
   "cards": [
     { "id": "systemStatus", "title": "System" }
   ]
 }
-
 

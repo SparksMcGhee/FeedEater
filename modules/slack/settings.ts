@@ -10,12 +10,12 @@ export const SlackSettingsSchema = z.object({
   lookbackHours: z.number().positive().default(24),
   includeThreads: z.boolean().default(true),
   excludeBots: z.boolean().default(true),
-  nonThreadContextTemplate: z.string().default("Message in channel {channel}"),
+  nonThreadNarrativeTemplate: z.string().default("Message in channel {channel}"),
   channelNameMap: z.string().default("{}"),
-  contextPrompt: z.string().default(
+  narrativePrompt: z.string().default(
     "You are summarizing the provided Slack messages. Summarize ONLY the messages provided. Do not make suggestions, ask questions, or add commentary. Return strict JSON with keys: summary_short and summary_long. summary_short must be <= 128 characters. summary_long should be 1-3 short paragraphs. Do not return empty strings."
   ),
-  contextPromptFallback: z.string().default(
+  narrativePromptFallback: z.string().default(
     "Summarize ONLY the provided messages in plain text. 1-3 short sentences. Do not return JSON. Do not make suggestions or ask questions."
   ),
 });

@@ -41,7 +41,7 @@ model BusMessage {
   rawJson         Json
 
   tags            BusTag[]
-  contexts        BusContextMessage[]
+  narratives      BusNarrativeMessage[]
 
   @@index([createdAt])
   @@index([sourceModule, createdAt])
@@ -63,7 +63,7 @@ model BusTag {
   @@map("bus_tags")
 }
 
-model BusContext {
+model BusNarrative {
   id           String   @id @default(uuid()) @db.Uuid
   ownerModule  String
   sourceKey    String
@@ -75,24 +75,24 @@ model BusContext {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  messages     BusContextMessage[]
+  messages     BusNarrativeMessage[]
 
   @@unique([ownerModule, sourceKey])
   @@index([ownerModule, updatedAt])
-  @@map("bus_contexts")
+  @@map("bus_narratives")
 }
 
-model BusContextMessage {
-  contextId String   @db.Uuid
-  messageId String   @db.Uuid
-  createdAt DateTime @default(now())
+model BusNarrativeMessage {
+  narrativeId String   @db.Uuid
+  messageId   String   @db.Uuid
+  createdAt   DateTime @default(now())
 
-  context   BusContext @relation(fields: [contextId], references: [id], onDelete: Cascade)
-  message   BusMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  narrative   BusNarrative @relation(fields: [narrativeId], references: [id], onDelete: Cascade)
+  message     BusMessage   @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
-  @@id([contextId, messageId])
+  @@id([narrativeId, messageId])
   @@index([messageId, createdAt])
-  @@map("bus_context_messages")
+  @@map("bus_narrative_messages")
 }
 
 model JobRun {
@@ -135,5 +135,4 @@ model BusReemitDedupe {
 
   @@map("bus_reemit_dedupe")
 }
-
 

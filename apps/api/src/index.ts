@@ -4,7 +4,7 @@ import { connect, StringCodec } from "nats";
 import { prisma } from "@feedeater/db";
 import { getModuleSettings, getModuleSettingsInternal, putModuleSetting } from "./settings.js";
 import { getAiTags, postAiEmbedding, postAiSummary } from "./ai.js";
-import { getContextMessages, getContextsHistory, getContextsStream } from "./contexts.js";
+import { getNarrativeMessages, getNarrativesHistory, getNarrativesStream } from "./narratives.js";
 import { discoverModules } from "./modules.js";
 import { getSlackChannels } from "./slackChannels.js";
 import { getLogsStream } from "./logsStream.js";
@@ -92,16 +92,16 @@ app.get("/api/bus/stream", async (req: Request, res: Response) => {
           data = { parseError: true };
         }
 
-        let contextSummaryShort: string | null = null;
+        let narrativeSummaryShort: string | null = null;
         try {
           const msg = (data as any)?.message;
-          const ref = msg?.contextRef;
+          const ref = msg?.narrativeRef ?? msg?.contextRef;
           if (ref?.ownerModule && ref?.sourceKey) {
-            const ctx = await prisma.busContext.findUnique({
+            const nv = await prisma.busNarrative.findUnique({
               where: { ownerModule_sourceKey: { ownerModule: String(ref.ownerModule), sourceKey: String(ref.sourceKey) } },
               select: { summaryShort: true },
             });
-            contextSummaryShort = ctx?.summaryShort ?? null;
+            narrativeSummaryShort = nv?.summaryShort ?? null;
           }
         } catch {
           // ignore
@@ -110,7 +110,7 @@ app.get("/api/bus/stream", async (req: Request, res: Response) => {
         const payload = {
           subject: m.subject,
           receivedAt: new Date().toISOString(),
-          contextSummaryShort,
+          narrativeSummaryShort,
           data,
         };
 
@@ -132,9 +132,9 @@ app.get("/api/bus/stream", async (req: Request, res: Response) => {
 
 // Historical bus messages (from Postgres archive).
 app.get("/api/bus/history", getBusHistory);
-app.get("/api/contexts/history", getContextsHistory);
-app.get("/api/contexts/messages", getContextMessages);
-app.get("/api/contexts/stream", getContextsStream({ getNatsConn, sc: natsSc }));
+app.get("/api/narratives/history", getNarrativesHistory);
+app.get("/api/narratives/messages", getNarrativeMessages);
+app.get("/api/narratives/stream", getNarrativesStream({ getNatsConn, sc: natsSc }));
 
 app.get("/api/settings/:module", getModuleSettings);
 app.put("/api/settings/:module/:key", putModuleSetting);

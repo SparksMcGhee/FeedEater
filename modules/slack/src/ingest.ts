@@ -1,9 +1,10 @@
 import { WebClient } from "@slack/web-api";
 import type { Pool } from "pg";
-import { v5 as uuidv5 } from "uuid";
 import type { NatsConnection, StringCodec } from "nats";
 
-import { ContextUpdatedEventSchema, MessageCreatedEventSchema, NormalizedMessageSchema, subjectFor } from "@feedeater/core";
+import { MessageCreatedEventSchema, NarrativeUpdatedEventSchema, NormalizedMessageSchema, subjectFor } from "@feedeater/core";
+
+import { slackSourceIdToBusMessageId } from "./slackMessageIds.js";
 
 export type SlackSettings = {
   enabled: boolean;
@@ -12,10 +13,10 @@ export type SlackSettings = {
   lookbackHours: number;
   includeThreads: boolean;
   excludeBots: boolean;
-  nonThreadContextTemplate: string;
+  nonThreadNarrativeTemplate: string;
   channelNameMap: Record<string, string>;
-  contextPrompt: string;
-  contextPromptFallback: string;
+  narrativePrompt: string;
+  narrativePromptFallback: string;
 };
 
 type SlackMessage = {
@@ -29,8 +30,6 @@ type SlackMessage = {
   replyCount?: number;
 };
 
-const UUID_NAMESPACE = "b437f58d-5842-4c68-b2ea-22de67e3f9ff";
-
 export function parseSlackSettingsFromInternal(raw: Record<string, unknown>): SlackSettings {
   // Internal settings endpoint returns strings (and decrypted secret strings) or nulls.
   // Normalize into the strongly-typed settings object.
@@ -43,14 +42,18 @@ export function parseSlackSettingsFromInternal(raw: Record<string, unknown>): Sl
   const lookbackHours = raw.lookbackHours ? Number(raw.lookbackHours) : 24;
   const includeThreads = String(raw.includeThreads ?? "true") !== "false";
   const excludeBots = String(raw.excludeBots ?? "true") !== "false";
-  const nonThreadContextTemplate = String(raw.nonThreadContextTemplate ?? "Message in channel {channel}");
+  const nonThreadNarrativeTemplate = String(
+    raw.nonThreadNarrativeTemplate ?? raw.nonThreadContextTemplate ?? "Message in channel {channel}"
+  );
   const channelNameMapRaw = String(raw.channelNameMap ?? "{}");
-  const defaultContextPrompt =
+  const defaultNarrativePrompt =
     "You are summarizing the provided Slack messages. Summarize ONLY the messages provided. Do not make suggestions, ask questions, or add commentary. Return strict JSON with keys: summary_short and summary_long. summary_short must be <= 128 characters. summary_long should be 1-3 short paragraphs. Do not return empty strings.";
-  const defaultContextPromptFallback =
+  const defaultNarrativePromptFallback =
     "Summarize ONLY the provided messages in plain text. 1-3 short sentences. Do not return JSON. Do not make suggestions or ask questions.";
-  const contextPrompt = String(raw.contextPrompt ?? "").trim() || defaultContextPrompt;
-  const contextPromptFallback = String(raw.contextPromptFallback ?? "").trim() || defaultContextPromptFallback;
+  const narrativePrompt =
+    String(raw.narrativePrompt ?? raw.contextPrompt ?? "").trim() || defaultNarrativePrompt;
+  const narrativePromptFallback =
+    String(raw.narrativePromptFallback ?? raw.contextPromptFallback ?? "").trim() || defaultNarrativePromptFallback;
   let channelNameMap: Record<string, string> = {};
   try {
     const parsed = JSON.parse(channelNameMapRaw) as Record<string, unknown>;
@@ -74,10 +77,10 @@ export function parseSlackSettingsFromInternal(raw: Record<string, unknown>): Sl
     lookbackHours,
     includeThreads,
     excludeBots,
-    nonThreadContextTemplate,
+    nonThreadNarrativeTemplate,
     channelNameMap,
-    contextPrompt,
-    contextPromptFallback,
+    narrativePrompt,
+    narrativePromptFallback,
   };
 }
 
@@ -86,7 +89,7 @@ export class SlackIngestor {
   private userCache = new Map<string, string>();
   private apiBaseUrl: string;
   private internalToken: string;
-  private contextTopK: number;
+  private narrativeTopK: number;
   private embedDim: number;
 
   private log(level: "debug" | "info" | "warn" | "error", message: string, meta?: unknown) {
@@ -114,12 +117,12 @@ export class SlackIngestor {
     private readonly db: Pool,
     private readonly nats: NatsConnection,
     private readonly sc: StringCodec,
-    opts: { apiBaseUrl: string; internalToken: string; contextTopK: number; embedDim: number }
+    opts: { apiBaseUrl: string; internalToken: string; narrativeTopK: number; embedDim: number }
   ) {
     this.slack = new WebClient(settings.botToken);
     this.apiBaseUrl = opts.apiBaseUrl.replace(/\/+$/, "");
     this.internalToken = opts.internalToken;
-    this.contextTopK = opts.contextTopK;
+    this.narrativeTopK = opts.narrativeTopK;
     this.embedDim = opts.embedDim;
   }
 
@@ -148,10 +151,11 @@ export class SlackIngestor {
       const replies: SlackMessage[] = [];
       for (let i = 1; i < result.messages.length; i++) {
         const m = result.messages[i];
-        if (!m || !m.ts || !m.user || !m.text) continue;
+        if (!m || !m.ts || !m.user) continue;
+        const textRaw = m.text != null && String(m.text).trim() !== "" ? String(m.text) : "(no text)";
         const username = await this.resolveUsername(String(m.user));
         replies.push({
-          text: this.normalizeSlackText(String(m.text)),
+          text: this.normalizeSlackText(textRaw),
           user: String(m.user),
           username,
           timestamp: String(m.ts),
@@ -185,7 +189,7 @@ export class SlackIngestor {
       const res = await fetch(`${this.apiBaseUrl}/api/internal/ai/summary`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${this.internalToken}` },
-        body: JSON.stringify({ prompt, system: this.settings.contextPrompt, format: "json" }),
+        body: JSON.stringify({ prompt, system: this.settings.narrativePrompt, format: "json" }),
       });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
@@ -220,7 +224,7 @@ export class SlackIngestor {
     const res = await fetch(`${this.apiBaseUrl}/api/internal/ai/summary`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${this.internalToken}` },
-      body: JSON.stringify({ prompt, system: this.settings.contextPromptFallback }),
+      body: JSON.stringify({ prompt, system: this.settings.narrativePromptFallback }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -289,8 +293,8 @@ export class SlackIngestor {
     }
   }
 
-  private async publishContextUpdate(params: {
-    contextKey: string;
+  private async publishNarrativeUpdate(params: {
+    narrativeKey: string;
     messageId?: string;
     summaryShort: string;
     summaryLong: string;
@@ -298,20 +302,20 @@ export class SlackIngestor {
     embedding?: number[];
   }) {
     const summaryShort = params.summaryShort.slice(0, 128);
-    const contextEvent = ContextUpdatedEventSchema.parse({
-      type: "ContextUpdated",
+    const narrativeEvent = NarrativeUpdatedEventSchema.parse({
+      type: "NarrativeUpdated",
       createdAt: new Date().toISOString(),
       messageId: params.messageId,
-      context: {
+      narrative: {
         ownerModule: "slack",
-        sourceKey: params.contextKey,
+        sourceKey: params.narrativeKey,
         summaryShort,
         summaryLong: params.summaryLong,
         keyPoints: params.keyPoints ?? [],
         embedding: params.embedding,
       },
     });
-    this.nats.publish(subjectFor("slack", "contextUpdated"), this.sc.encode(JSON.stringify(contextEvent)));
+    this.nats.publish(subjectFor("slack", "narrativeUpdated"), this.sc.encode(JSON.stringify(narrativeEvent)));
   }
 
   private async fetchChannelMessages(channelIds: string[], lookbackHours: number): Promise<SlackMessage[]> {
@@ -340,12 +344,13 @@ export class SlackIngestor {
       }
 
       for (const m of result.messages ?? []) {
-        if (!m || !m.ts || !m.user || !m.text) continue;
+        if (!m || !m.ts || !m.user) continue;
         if (this.settings.excludeBots && (m.subtype === "bot_message" || (m as any).bot_id)) continue;
 
+        const textRaw = m.text != null && String(m.text).trim() !== "" ? String(m.text) : "(no text)";
         const username = await this.resolveUsername(String(m.user));
         const msg: SlackMessage = {
-          text: this.normalizeSlackText(String(m.text)),
+          text: this.normalizeSlackText(textRaw),
           user: String(m.user),
           username,
           timestamp: String(m.ts),
@@ -403,18 +408,39 @@ export class SlackIngestor {
       CREATE TABLE IF NOT EXISTS mod_slack.slack_message_embeddings (
         id text PRIMARY KEY,
         channel_id text NOT NULL,
-        context_key text NOT NULL,
+        narrative_key text NOT NULL,
         ts timestamptz NOT NULL,
         embedding vector(${embedDim})
       )
     `);
+    await this.db.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'mod_slack' AND table_name = 'slack_message_embeddings' AND column_name = 'context_key'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_schema = 'mod_slack' AND table_name = 'slack_message_embeddings' AND column_name = 'narrative_key'
+        ) THEN
+          ALTER TABLE mod_slack.slack_message_embeddings RENAME COLUMN context_key TO narrative_key;
+        END IF;
+      END $$
+    `);
+    // CREATE TABLE IF NOT EXISTS does not add columns to an existing table; e.g. after
+    // ALTER TABLE ... DROP COLUMN embedding (dimension migration in docs).
     if (Number.isFinite(embedDim) && embedDim > 0) {
+      await this.db.query(`
+        ALTER TABLE mod_slack.slack_message_embeddings
+        ADD COLUMN IF NOT EXISTS embedding vector(${embedDim})
+      `);
       await this.db.query(
         `ALTER TABLE mod_slack.slack_message_embeddings ALTER COLUMN embedding TYPE vector(${embedDim}) USING embedding::vector`
       );
     }
+    await this.db.query(`DROP INDEX IF EXISTS slack_message_embeddings_context_idx`);
     await this.db.query(
-      `CREATE INDEX IF NOT EXISTS slack_message_embeddings_context_idx ON mod_slack.slack_message_embeddings (context_key, ts)`
+      `CREATE INDEX IF NOT EXISTS slack_message_embeddings_narrative_idx ON mod_slack.slack_message_embeddings (narrative_key, ts)`
     );
     if (Number.isFinite(embedDim) && embedDim <= 2000) {
       await this.db.query(
@@ -479,8 +505,8 @@ export class SlackIngestor {
 
         const inserted = Boolean(upsert.rows?.[0]?.inserted);
         if (inserted) {
-          const msgId = uuidv5(sourceId, UUID_NAMESPACE);
-          const contextKey = `${m.channel}:${m.threadTs ?? m.timestamp}`;
+          const msgId = slackSourceIdToBusMessageId(sourceId);
+          const narrativeKey = `${m.channel}:${m.threadTs ?? m.timestamp}`;
           const slackLink = `https://slack.com/app_redirect?channel=${encodeURIComponent(m.channel)}&message_ts=${encodeURIComponent(
             m.threadTs ?? m.timestamp
           )}`;
@@ -490,7 +516,7 @@ export class SlackIngestor {
             source: { module: "slack", stream: m.channel },
             realtime: false,
             Message: m.text,
-            contextRef: { ownerModule: "slack", sourceKey: contextKey },
+            narrativeRef: { ownerModule: "slack", sourceKey: narrativeKey },
             followMePanel: {
               module: "slack",
               panelId: "thread",
@@ -517,11 +543,11 @@ export class SlackIngestor {
             await client.query(
               `
               INSERT INTO mod_slack.slack_message_embeddings (
-                id, channel_id, context_key, ts, embedding
+                id, channel_id, narrative_key, ts, embedding
               ) VALUES ($1, $2, $3, to_timestamp($4), $5::vector)
               ON CONFLICT (id) DO NOTHING
               `,
-              [sourceId, m.channel, contextKey, tsNum, `[${embedding.join(",")}]`]
+              [sourceId, m.channel, narrativeKey, tsNum, `[${embedding.join(",")}]`]
             );
           } else if (embedding.length) {
             this.log("warn", "embedding dimension mismatch", {
@@ -549,7 +575,7 @@ export class SlackIngestor {
     }
   }
 
-  async refreshContexts(params: { lookbackHours: number }): Promise<{
+  async refreshNarratives(params: { lookbackHours: number }): Promise<{
     updated: number;
     aiSummaries: number;
     fallbackSummaries: number;
@@ -584,14 +610,14 @@ export class SlackIngestor {
       thread_ts: string | null;
       text: string | null;
     }>) {
-      const contextKey = `${row.channel_id}:${row.thread_ts ?? row.slack_ts}`;
+      const narrativeKey = `${row.channel_id}:${row.thread_ts ?? row.slack_ts}`;
       const sourceId = `slack-${row.channel_id}-${row.slack_ts}`;
-      const msgId = uuidv5(sourceId, UUID_NAMESPACE);
+      const msgId = slackSourceIdToBusMessageId(sourceId);
       if (!row.thread_ts) {
         const channelName = this.settings.channelNameMap[row.channel_id] ?? row.channel_id;
-        const summaryShort = this.settings.nonThreadContextTemplate.replace("{channel}", channelName).slice(0, 128);
-        await this.publishContextUpdate({
-          contextKey,
+        const summaryShort = this.settings.nonThreadNarrativeTemplate.replace("{channel}", channelName).slice(0, 128);
+        await this.publishNarrativeUpdate({
+          narrativeKey,
           messageId: msgId,
           summaryShort,
           summaryLong: summaryShort,
@@ -603,44 +629,78 @@ export class SlackIngestor {
       }
 
       const prior = await this.db.query(
-        `SELECT "summaryLong" FROM bus_contexts WHERE "ownerModule" = $1 AND "sourceKey" = $2 LIMIT 1`,
-        ["slack", contextKey]
+        `SELECT "summaryLong" FROM bus_narratives WHERE "ownerModule" = $1 AND "sourceKey" = $2 LIMIT 1`,
+        ["slack", narrativeKey]
       );
       const priorSummary = String(prior.rows?.[0]?.summaryLong ?? "");
-      const queryText = priorSummary || String(row.text ?? "");
-      const queryEmbedding = await this.aiEmbed(queryText);
+      const threadRootTs = row.thread_ts ?? row.slack_ts;
+      const topK = Number.isFinite(this.narrativeTopK) ? this.narrativeTopK : 20;
+
+      const countRes = await this.db.query(
+        `
+        SELECT COUNT(*)::int AS c FROM mod_slack.slack_messages
+        WHERE channel_id = $1 AND (
+          (thread_ts IS NULL AND slack_ts = $2)
+          OR (thread_ts = $2)
+        )
+        `,
+        [row.channel_id, threadRootTs]
+      );
+      const threadMsgCount = Number(countRes.rows?.[0]?.c ?? 0);
 
       let messages: Array<string> = [];
-      const topK = Number.isFinite(this.contextTopK) ? this.contextTopK : 20;
-      if (queryEmbedding) {
-        const embRows = await this.db.query(
+
+      if (threadMsgCount > 0 && threadMsgCount <= topK) {
+        const chron = await this.db.query(
           `
-          SELECT m.text
-          FROM mod_slack.slack_message_embeddings e
-          JOIN mod_slack.slack_messages m ON m.id = e.id
-          WHERE e.context_key = $1
-          ORDER BY e.embedding <-> $2::vector
+          SELECT text FROM mod_slack.slack_messages
+          WHERE channel_id = $1 AND (
+            (thread_ts IS NULL AND slack_ts = $2)
+            OR (thread_ts = $2)
+          )
+          ORDER BY ts ASC
           LIMIT $3
           `,
-          [contextKey, `[${queryEmbedding.join(",")}]`, topK]
+          [row.channel_id, threadRootTs, topK]
         );
-        messages = (embRows.rows ?? []).map((r: { text: string | null }) => String(r.text ?? "")).filter(Boolean);
+        messages = (chron.rows ?? []).map((r: { text: string | null }) => String(r.text ?? "")).filter(Boolean);
+      }
+
+      if (messages.length === 0 && threadMsgCount > topK) {
+        const queryText = priorSummary || String(row.text ?? "");
+        const queryEmbedding = await this.aiEmbed(queryText);
+        if (queryEmbedding) {
+          const embRows = await this.db.query(
+            `
+            SELECT m.text
+            FROM mod_slack.slack_message_embeddings e
+            JOIN mod_slack.slack_messages m ON m.id = e.id
+            WHERE e.narrative_key = $1
+            ORDER BY e.embedding <-> $2::vector
+            LIMIT $3
+            `,
+            [narrativeKey, `[${queryEmbedding.join(",")}]`, topK]
+          );
+          messages = (embRows.rows ?? []).map((r: { text: string | null }) => String(r.text ?? "")).filter(Boolean);
+        }
       }
 
       if (messages.length === 0) {
         const fallback = await this.db.query(
           `
-          SELECT text
-          FROM mod_slack.slack_messages
-          WHERE channel_id = $1 AND COALESCE(thread_ts, slack_ts) = $2
+          SELECT text FROM mod_slack.slack_messages
+          WHERE channel_id = $1 AND (
+            (thread_ts IS NULL AND slack_ts = $2)
+            OR (thread_ts = $2)
+          )
           ORDER BY ts DESC
           LIMIT $3
           `,
-          [row.channel_id, row.thread_ts ?? row.slack_ts, topK]
+          [row.channel_id, threadRootTs, topK]
         );
         messages = (fallback.rows ?? []).map((r: { text: string | null }) => String(r.text ?? "")).filter(Boolean);
         if (messages.length === 0) {
-          this.log("warn", "no thread messages found for context", { contextKey, channelId: row.channel_id });
+          this.log("warn", "no thread messages found for narrative", { narrativeKey, channelId: row.channel_id });
         }
       }
 
@@ -657,19 +717,19 @@ export class SlackIngestor {
 
       const aiSummary = await this.aiGenerate(promptText);
 
-      const contextEmbedding = await this.aiEmbed(aiSummary.summaryLong);
-      if (contextEmbedding.length) embeddingsInserted++;
+      const narrativeEmbedding = await this.aiEmbed(aiSummary.summaryLong);
+      if (narrativeEmbedding.length) embeddingsInserted++;
       if (typeof aiSummary.tokenRate === "number") {
         tokenRateSum += aiSummary.tokenRate;
         tokenRateCount += 1;
       }
-      await this.publishContextUpdate({
-        contextKey,
+      await this.publishNarrativeUpdate({
+        narrativeKey,
         messageId: msgId,
         summaryShort: aiSummary.summaryShort,
         summaryLong: aiSummary.summaryLong,
         keyPoints: [],
-        ...(contextEmbedding.length ? { embedding: contextEmbedding } : {}),
+        ...(narrativeEmbedding.length ? { embedding: narrativeEmbedding } : {}),
       });
       aiSummaries++;
       updated++;

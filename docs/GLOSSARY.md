@@ -17,10 +17,10 @@ Short, stable definitions for core concepts. Intended for humans and AI agents.
 - **Tag**: A key/value enrichment on a message used for routing, filtering, or
   downstream processing.
 - **TagAppended**: Bus event type that adds a tag to an existing message.
-- **Context**: Platform-owned conversation summary that evolves as new messages arrive.
-- **ContextSummary**: The short/long summaries and key points stored on a Context (not on messages).
-- **ContextEmbedding**: Vector representation of a Context used for semantic recall.
-- **ContextUpdated**: Bus event type that updates a context summary, key points, and embedding.
+- **Narrative**: Platform-owned conversation summary that evolves as new messages arrive (distinct from LLM “context window”).
+- **NarrativeSummary**: The short/long summaries and key points stored on a Narrative (not on messages).
+- **NarrativeEmbedding**: Vector representation of a Narrative used for semantic recall.
+- **NarrativeUpdated**: Bus event type that updates a narrative summary, key points, and embedding.
 - **FollowMePanel**: Module-provided drill-down panel association for a message.
 - **Realtime Flag**: A transient boolean on `NormalizedMessage` (`realtime: true`)
   indicating a first-time live emission (not replay).
@@ -32,8 +32,8 @@ Short, stable definitions for core concepts. Intended for humans and AI agents.
 - **BusMessage** (`bus_messages`): Archive of `NormalizedMessage` events written by the
   worker archiver. Used for history queries.
 - **BusTag** (`bus_tags`): Archive of tags appended to messages.
-- **BusContext** (`bus_contexts`): Stored context summaries with optional embeddings.
-- **BusContextMessage** (`bus_context_messages`): Association between messages and contexts.
+- **BusNarrative** (`bus_narratives`): Stored narrative summaries with optional embeddings.
+- **BusNarrativeMessage** (`bus_narrative_messages`): Association between messages and narratives.
 - **JobRun** (`job_runs`): Per-execution record for jobs (queued/running/success/error).
 - **JobState** (`job_states`): Last-run and last-error state for each module job.
 - **BusReemitDedupe** (`bus_reemit_dedupe`): Dedupe table for startup re-emit so
@@ -59,5 +59,5 @@ Short, stable definitions for core concepts. Intended for humans and AI agents.
 - Prefer **“FeedEater Bus”** or **“Message Bus”** for the unified bus.
 - Use **“NormalizedMessage”**, **“MessageCreated”**, and **“TagAppended”** as exact
   protocol names.
-- Use **“BusMessage archive”**, **“BusTag archive”**, and **“BusContext archive”** for Postgres tables.
+- Use **“BusMessage archive”**, **“BusTag archive”**, and **“BusNarrative archive”** for Postgres tables.
 - Use **“JobRun”** and **“JobState”** for scheduler metadata.

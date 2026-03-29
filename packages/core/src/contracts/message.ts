@@ -14,13 +14,18 @@ export const FollowMePanelSchema = z.object({
 });
 export type FollowMePanel = z.infer<typeof FollowMePanelSchema>;
 
-export const MessageContextRefSchema = z.object({
+export const MessageNarrativeRefSchema = z.object({
   ownerModule: z.string(),
   sourceKey: z.string(),
 });
-export type MessageContextRef = z.infer<typeof MessageContextRefSchema>;
+export type MessageNarrativeRef = z.infer<typeof MessageNarrativeRefSchema>;
 
-export const NormalizedMessageSchema = z.object({
+/** @deprecated Prefer MessageNarrativeRef — alias for legacy archived payloads */
+export const MessageContextRefSchema = MessageNarrativeRefSchema;
+/** @deprecated Prefer MessageNarrativeRef */
+export type MessageContextRef = MessageNarrativeRef;
+
+const NormalizedMessageInputSchema = z.object({
   id: z.string().uuid(),
   createdAt: z.string().datetime(),
   source: z.object({
@@ -31,8 +36,9 @@ export const NormalizedMessageSchema = z.object({
   realtime: z.boolean().optional(),
   // Human-readable body.
   Message: z.string().optional(),
-  // Context linkage (summaries live in contexts, not messages).
-  contextRef: MessageContextRefSchema.optional(),
+  // Narrative linkage (summaries live on narratives, not messages). Legacy key: contextRef.
+  narrativeRef: MessageNarrativeRefSchema.optional(),
+  contextRef: MessageNarrativeRefSchema.optional(),
   // Module-provided drill-down panel association.
   followMePanel: FollowMePanelSchema.optional(),
   From: z.string().optional(),
@@ -43,6 +49,10 @@ export const NormalizedMessageSchema = z.object({
   tags: MessageTagsSchema.default({}),
 });
 
-export type NormalizedMessage = z.infer<typeof NormalizedMessageSchema>;
+export const NormalizedMessageSchema = NormalizedMessageInputSchema.transform((data) => {
+  const { contextRef, narrativeRef, ...rest } = data;
+  const ref = narrativeRef ?? contextRef;
+  return ref !== undefined ? { ...rest, narrativeRef: ref } : { ...rest };
+});
 
-
+export type NormalizedMessage = z.output<typeof NormalizedMessageSchema>;

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import type { NatsConnection, StringCodec } from "nats";
-import { ContextUpdatedEventSchema } from "@feedeater/core";
+import { NarrativeUpdatedEventSchema } from "@feedeater/core";
 import { prisma } from "@feedeater/db";
 
 function clamp(n: number, lo: number, hi: number) {
@@ -12,7 +12,7 @@ function normalizeKeyPoints(value: unknown): string[] {
   return value.map((v) => String(v));
 }
 
-export function getContextsHistory(req: Request, res: Response) {
+export function getNarrativesHistory(req: Request, res: Response) {
   return (async () => {
     try {
       const sinceMinutesRaw = req.query.sinceMinutes;
@@ -26,7 +26,7 @@ export function getContextsHistory(req: Request, res: Response) {
       const q = typeof qRaw === "string" ? qRaw.trim() : "";
 
       const since = new Date(Date.now() - sinceMinutes * 60_000);
-      const rows = await prisma.busContext.findMany({
+      const rows = await prisma.busNarrative.findMany({
         where: {
           ...(sinceMinutes > 0 ? { updatedAt: { gte: since } } : {}),
           ...(moduleFilter ? { ownerModule: moduleFilter } : {}),
@@ -67,18 +67,18 @@ export function getContextsHistory(req: Request, res: Response) {
   })();
 }
 
-export function getContextMessages(req: Request, res: Response) {
+export function getNarrativeMessages(req: Request, res: Response) {
   return (async () => {
     try {
-      const contextIdRaw = req.query.contextId;
+      const narrativeIdRaw = req.query.narrativeId;
       const ownerModuleRaw = req.query.ownerModule;
       const sourceKeyRaw = req.query.sourceKey;
 
-      const contextId = typeof contextIdRaw === "string" ? contextIdRaw.trim() : "";
+      const narrativeId = typeof narrativeIdRaw === "string" ? narrativeIdRaw.trim() : "";
       const ownerModule = typeof ownerModuleRaw === "string" ? ownerModuleRaw.trim() : "";
       const sourceKey = typeof sourceKeyRaw === "string" ? sourceKeyRaw.trim() : "";
 
-      let context = null as null | {
+      let narrative = null as null | {
         id: string;
         ownerModule: string;
         sourceKey: string;
@@ -90,21 +90,21 @@ export function getContextMessages(req: Request, res: Response) {
         updatedAt: Date;
       };
 
-      if (contextId) {
-        context = await prisma.busContext.findUnique({ where: { id: contextId } });
+      if (narrativeId) {
+        narrative = await prisma.busNarrative.findUnique({ where: { id: narrativeId } });
       } else if (ownerModule && sourceKey) {
-        context = await prisma.busContext.findUnique({
+        narrative = await prisma.busNarrative.findUnique({
           where: { ownerModule_sourceKey: { ownerModule, sourceKey } },
         });
       }
 
-      if (!context) {
-        res.status(404).json({ ok: false, error: "Context not found" });
+      if (!narrative) {
+        res.status(404).json({ ok: false, error: "Narrative not found" });
         return;
       }
 
-      const rows = await prisma.busContextMessage.findMany({
-        where: { contextId: context.id },
+      const rows = await prisma.busNarrativeMessage.findMany({
+        where: { narrativeId: narrative.id },
         include: {
           message: {
             select: {
@@ -119,16 +119,16 @@ export function getContextMessages(req: Request, res: Response) {
 
       res.json({
         ok: true,
-        context: {
-          id: context.id,
-          ownerModule: context.ownerModule,
-          sourceKey: context.sourceKey,
-          summaryShort: context.summaryShort,
-          summaryLong: context.summaryLong,
-          keyPoints: normalizeKeyPoints(context.keyPoints),
-          version: context.version,
-          createdAt: context.createdAt.toISOString(),
-          updatedAt: context.updatedAt.toISOString(),
+        narrative: {
+          id: narrative.id,
+          ownerModule: narrative.ownerModule,
+          sourceKey: narrative.sourceKey,
+          summaryShort: narrative.summaryShort,
+          summaryLong: narrative.summaryLong,
+          keyPoints: normalizeKeyPoints(narrative.keyPoints),
+          version: narrative.version,
+          createdAt: narrative.createdAt.toISOString(),
+          updatedAt: narrative.updatedAt.toISOString(),
         },
         messages: rows.map((r) => ({
           id: r.message.id,
@@ -142,7 +142,7 @@ export function getContextMessages(req: Request, res: Response) {
   })();
 }
 
-export function getContextsStream(params: { getNatsConn: () => Promise<NatsConnection>; sc: StringCodec }) {
+export function getNarrativesStream(params: { getNatsConn: () => Promise<NatsConnection>; sc: StringCodec }) {
   return async (req: Request, res: Response) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -156,7 +156,7 @@ export function getContextsStream(params: { getNatsConn: () => Promise<NatsConne
     }, 15000);
 
     const nc = await params.getNatsConn();
-    const sub = nc.subscribe("feedeater.*.contextUpdated");
+    const sub = nc.subscribe("feedeater.*.narrativeUpdated");
 
     let closed = false;
     req.on("close", () => {
@@ -180,13 +180,13 @@ export function getContextsStream(params: { getNatsConn: () => Promise<NatsConne
             data = { parseError: true };
           }
 
-          const parsed = ContextUpdatedEventSchema.safeParse(data);
+          const parsed = NarrativeUpdatedEventSchema.safeParse(data);
           if (!parsed.success) continue;
-          const ctx = parsed.data.context;
-          if (!ctx.ownerModule || !ctx.sourceKey) continue;
+          const nv = parsed.data.narrative;
+          if (!nv.ownerModule || !nv.sourceKey) continue;
 
-          const record = await prisma.busContext.findUnique({
-            where: { ownerModule_sourceKey: { ownerModule: ctx.ownerModule, sourceKey: ctx.sourceKey } },
+          const record = await prisma.busNarrative.findUnique({
+            where: { ownerModule_sourceKey: { ownerModule: nv.ownerModule, sourceKey: nv.sourceKey } },
             include: { _count: { select: { messages: true } } },
           });
           if (!record) continue;
@@ -195,7 +195,7 @@ export function getContextsStream(params: { getNatsConn: () => Promise<NatsConne
             subject: m.subject,
             receivedAt: new Date().toISOString(),
             messageId: parsed.data.messageId ?? null,
-            context: {
+            narrative: {
               id: record.id,
               ownerModule: record.ownerModule,
               sourceKey: record.sourceKey,
@@ -209,7 +209,7 @@ export function getContextsStream(params: { getNatsConn: () => Promise<NatsConne
             },
           };
 
-          res.write("event: context\n");
+          res.write("event: narrative\n");
           res.write(`data: ${JSON.stringify(payload)}\n\n`);
         }
       } catch {

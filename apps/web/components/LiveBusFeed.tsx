@@ -35,7 +35,7 @@ function renderMessageText(text: string) {
 type BusEnvelope = {
   subject: string;
   receivedAt: string;
-  contextSummaryShort?: string | null;
+  narrativeSummaryShort?: string | null;
   data: {
     type: "MessageCreated";
     message: {
@@ -360,7 +360,7 @@ export function LiveBusFeed() {
         ) : (
           items.map((e: BusEnvelope) => {
             const m = e.data.message;
-            const summary = e.contextSummaryShort ?? "";
+            const summary = e.narrativeSummaryShort ?? "";
             return (
               <div
                 key={`${m.id}:${e.receivedAt}`}

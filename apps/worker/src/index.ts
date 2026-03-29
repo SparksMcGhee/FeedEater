@@ -1,14 +1,15 @@
 import { connect, StringCodec } from "nats";
 import { Pool } from "pg";
 import {
-  ContextUpdatedEventSchema,
   JobRunEventSchema,
   MessageCreatedEventSchema,
+  NarrativeUpdatedEventSchema,
   NormalizedMessageSchema,
   createSettingsClient,
   jobSubjectFor,
   subjectFor,
 } from "@feedeater/core";
+import { slackSourceIdToBusMessageId } from "@feedeater/module-slack";
 import { discoverModules } from "./modules/discovery.js";
 import type { ModuleRuntimeContext, ModuleRuntime } from "@feedeater/module-sdk";
 import { loadModuleRuntime } from "./modules/runtime.js";
@@ -65,7 +66,7 @@ const DATABASE_URL = requiredEnv("DATABASE_URL");
 
 const sc = StringCodec();
 const JOB_SUBJECT_WILDCARD = "feedeater.jobs.>";
-const CONTEXT_SUBJECT_WILDCARD = "feedeater.*.contextUpdated";
+const NARRATIVE_SUBJECT_WILDCARD = "feedeater.*.narrativeUpdated";
 
 type JobTrigger = { type: "schedule" | "manual" | "event"; subject?: string; messageId?: string };
 
@@ -74,7 +75,7 @@ function serializeError(err: unknown): string {
   return typeof err === "string" ? err : safeJson(err);
 }
 
-async function ensureContextStorage(
+async function ensureNarrativeStorage(
   db: Pool,
   publish: (level: LogLevel, message: string, meta?: unknown) => void,
   embedDim: number
@@ -88,10 +89,13 @@ async function ensureContextStorage(
   if (Number.isFinite(embedDim) && embedDim > 0) {
     try {
       await db.query(
-        `ALTER TABLE bus_contexts ALTER COLUMN embedding TYPE vector(${embedDim}) USING embedding::vector`
+        `ALTER TABLE bus_narratives ADD COLUMN IF NOT EXISTS embedding vector(${embedDim})`
+      );
+      await db.query(
+        `ALTER TABLE bus_narratives ALTER COLUMN embedding TYPE vector(${embedDim}) USING embedding::vector`
       );
     } catch (err) {
-      publish("warn", "failed to ensure bus_contexts embedding dimension", { err: serializeError(err) });
+      publish("warn", "failed to ensure bus_narratives embedding dimension", { err: serializeError(err) });
     }
   }
 
@@ -99,24 +103,24 @@ async function ensureContextStorage(
     try {
       await db.query(
         `
-        CREATE INDEX IF NOT EXISTS bus_context_embedding_idx
-        ON bus_contexts USING ivfflat (embedding vector_cosine_ops)
+        CREATE INDEX IF NOT EXISTS bus_narrative_embedding_idx
+        ON bus_narratives USING ivfflat (embedding vector_cosine_ops)
         `
       );
     } catch (err) {
-      publish("warn", "failed to ensure bus_contexts embedding index", { err: serializeError(err) });
+      publish("warn", "failed to ensure bus_narratives embedding index", { err: serializeError(err) });
     }
   } else {
     try {
-      await db.query(`DROP INDEX IF EXISTS bus_context_embedding_idx`);
+      await db.query(`DROP INDEX IF EXISTS bus_narrative_embedding_idx`);
     } catch {
       // ignore
     }
-    publish("warn", "skipping bus_contexts ivfflat index (embedding dim > 2000)", { embedDim });
+    publish("warn", "skipping bus_narratives ivfflat index (embedding dim > 2000)", { embedDim });
   }
 }
 
-async function upsertContext(params: {
+async function upsertNarrative(params: {
   db: Pool;
   ownerModule: string;
   sourceKey?: string;
@@ -136,7 +140,7 @@ async function upsertContext(params: {
 
   const res = await params.db.query(
     `
-    INSERT INTO bus_contexts (
+    INSERT INTO bus_narratives (
       id, "ownerModule", "sourceKey", "summaryShort", "summaryLong", "keyPoints", embedding, version, "createdAt", "updatedAt"
     ) VALUES (
       $1, $2, $3, $4, $5, $6,
@@ -149,7 +153,7 @@ async function upsertContext(params: {
       "keyPoints" = EXCLUDED."keyPoints",
       embedding = EXCLUDED.embedding,
       "updatedAt" = now(),
-      version = bus_contexts.version + 1
+      version = bus_narratives.version + 1
     RETURNING id
     `,
     [
@@ -163,15 +167,46 @@ async function upsertContext(params: {
     ]
   );
 
-  const contextId = res.rows?.[0]?.id as string | undefined;
-  if (contextId && params.messageId) {
+  const narrativeId = res.rows?.[0]?.id as string | undefined;
+  if (!narrativeId) return;
+
+  if (params.ownerModule === "slack") {
+    const colon = sourceKey.indexOf(":");
+    if (colon > 0) {
+      const channelId = sourceKey.slice(0, colon);
+      const threadRootTs = sourceKey.slice(colon + 1);
+      const slackRows = await params.db.query(
+        `
+        SELECT id FROM mod_slack.slack_messages
+        WHERE channel_id = $1 AND (
+          (thread_ts IS NULL AND slack_ts = $2)
+          OR (thread_ts = $2)
+        )
+        `,
+        [channelId, threadRootTs]
+      );
+      for (const r of slackRows.rows ?? []) {
+        const busId = slackSourceIdToBusMessageId(String((r as { id: string }).id));
+        await params.db.query(
+          `
+          INSERT INTO bus_narrative_messages ("narrativeId", "messageId", "createdAt")
+          VALUES ($1, $2, now())
+          ON CONFLICT ("narrativeId", "messageId") DO NOTHING
+          `,
+          [narrativeId, busId]
+        );
+      }
+    }
+  }
+
+  if (params.messageId) {
     await params.db.query(
       `
-      INSERT INTO bus_context_messages ("contextId", "messageId", "createdAt")
+      INSERT INTO bus_narrative_messages ("narrativeId", "messageId", "createdAt")
       VALUES ($1, $2, now())
-      ON CONFLICT ("contextId", "messageId") DO NOTHING
+      ON CONFLICT ("narrativeId", "messageId") DO NOTHING
       `,
-      [contextId, params.messageId]
+      [narrativeId, params.messageId]
     );
   }
 }
@@ -408,7 +443,7 @@ async function main() {
     const sysEmbedDimRaw = sysSettings.ai_embed_dim ?? sysSettings.ollama_embed_dim ?? DEFAULT_EMBED_DIM;
     const sysEmbedDim = Number.isFinite(Number(sysEmbedDimRaw)) ? Number(sysEmbedDimRaw) : DEFAULT_EMBED_DIM;
     currentEmbedDim = sysEmbedDim;
-    await ensureContextStorage(db, (level, message, meta) => publishLog(nc, sc, level, message, meta), sysEmbedDim);
+    await ensureNarrativeStorage(db, (level, message, meta) => publishLog(nc, sc, level, message, meta), sysEmbedDim);
 
     // Start append-only archive consumer (JetStream -> Postgres).
     await startBusArchiver({ nc, db, fetchInternalSettings: fetchSettings });
@@ -549,7 +584,11 @@ async function main() {
             moduleName: env.module,
             queue: env.queue,
             jobName: env.job,
-            trigger: env.trigger,
+            trigger: {
+              type: env.trigger.type,
+              ...(env.trigger.subject !== undefined ? { subject: env.trigger.subject } : {}),
+              ...(env.trigger.messageId !== undefined ? { messageId: env.trigger.messageId } : {}),
+            },
           });
 
           const rt = runtimeByModule.get(env.module);
@@ -589,30 +628,30 @@ async function main() {
       publishLog(nc, sc, "error", "job subscription loop crashed", err);
     });
 
-    const contextSub = nc.subscribe(CONTEXT_SUBJECT_WILDCARD);
+    const narrativeSub = nc.subscribe(NARRATIVE_SUBJECT_WILDCARD);
     (async () => {
-      for await (const m of contextSub) {
+      for await (const m of narrativeSub) {
         try {
           const raw = JSON.parse(sc.decode(m.data)) as unknown;
-          const env = ContextUpdatedEventSchema.parse(raw);
-          await upsertContext({
+          const env = NarrativeUpdatedEventSchema.parse(raw);
+          await upsertNarrative({
             db,
-            ownerModule: env.context.ownerModule,
-            sourceKey: env.context.sourceKey,
-            summaryShort: env.context.summaryShort,
-            summaryLong: env.context.summaryLong,
-            keyPoints: env.context.keyPoints ?? [],
-            embedding: env.context.embedding,
-            messageId: env.messageId,
+            ownerModule: env.narrative.ownerModule,
+            ...(env.narrative.sourceKey !== undefined ? { sourceKey: env.narrative.sourceKey } : {}),
+            summaryShort: env.narrative.summaryShort,
+            summaryLong: env.narrative.summaryLong,
+            keyPoints: env.narrative.keyPoints ?? [],
+            ...(env.narrative.embedding !== undefined ? { embedding: env.narrative.embedding } : {}),
+            ...(env.messageId !== undefined ? { messageId: env.messageId } : {}),
           });
         } catch (err) {
-          publishLog(nc, sc, "warn", "failed to apply context update", { err: serializeError(err) });
+          publishLog(nc, sc, "warn", "failed to apply narrative update", { err: serializeError(err) });
         }
       }
     })().catch((err) => {
       // eslint-disable-next-line no-console
-      console.error("[worker] context subscription loop crashed", err);
-      publishLog(nc, sc, "error", "context subscription loop crashed", err);
+      console.error("[worker] narrative subscription loop crashed", err);
+      publishLog(nc, sc, "error", "narrative subscription loop crashed", err);
     });
 
     // Re-emit Postgres history into NATS for dashboard lookback window.

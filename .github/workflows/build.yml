@@ -1,0 +1,101 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: build-main
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        target: [api, worker, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: ${{ matrix.target }}
+          push: true
+          tags: ghcr.io/sparksmcghee/feedeater-${{ matrix.target }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.target }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.target }}
+
+  qualify:
+    # Image-under-test qualification (plan 04 gate 4): bring up the exact sha-tagged
+    # images from GHCR and smoke them. :main is only tagged if this passes.
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      FEED_SETTINGS_KEY: ci-qualify-dummy-key-not-a-secret
+      FEED_INTERNAL_TOKEN: ci-qualify-token-not-a-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start backing services
+        run: docker compose -f docker-compose.prod.yml up -d postgres nats
+      - name: Apply schema (fresh CI database; mirrors the deploy agent's flow)
+        run: docker compose -f docker-compose.prod.yml run --rm --workdir /app api npx prisma db push --schema packages/db/prisma/schema.prisma
+      - name: Start stack from sha-tagged images
+        run: docker compose -f docker-compose.prod.yml up -d
+      - name: Wait for API health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:666/api/health >/dev/null; then
+              echo "API healthy"; exit 0
+            fi
+            sleep 5
+          done
+          echo "API never became healthy"
+          exit 1
+      - name: Check web UI serves
+        run: curl -fsS http://localhost:666/ -o /dev/null
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs --tail=200
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v
+
+  promote:
+    needs: qualify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        target: [api, worker, web]
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Apply :main to the qualified image (server-side retag)
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/sparksmcghee/feedeater-${{ matrix.target }}:main \
+            ghcr.io/sparksmcghee/feedeater-${{ matrix.target }}:${{ github.sha }}

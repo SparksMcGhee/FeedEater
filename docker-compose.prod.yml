@@ -74,7 +74,7 @@ services:
     ports:
       - "666:666"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       web:
         condition: service_started

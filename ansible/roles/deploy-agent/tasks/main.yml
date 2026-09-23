@@ -9,6 +9,14 @@
     group: docker
     mode: "0750"
 
+- name: Create docker subdir for Caddyfile placement
+  ansible.builtin.file:
+    path: "{{ deploy_agent_root }}/docker"
+    state: directory
+    owner: root
+    group: docker
+    mode: "0750"
+
 - name: Place production compose file
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../docker-compose.prod.yml"
@@ -21,7 +29,7 @@
 - name: Place Caddyfile
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../docker/Caddyfile"
-    dest: "{{ deploy_agent_root }}/Caddyfile"
+    dest: "{{ deploy_agent_root }}/docker/Caddyfile"
     owner: root
     group: docker
     mode: "0640"

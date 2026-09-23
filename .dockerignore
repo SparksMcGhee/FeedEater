@@ -1,0 +1,10 @@
+.git
+.env
+node_modules
+**/node_modules
+**/dist
+**/.next
+**/out
+*.log
+docker-compose*.yml
+ansible

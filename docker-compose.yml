@@ -22,7 +22,8 @@ services:
   api:
     build:
       context: .
-      dockerfile: docker/Dockerfile.api
+      dockerfile: docker/Dockerfile
+      target: api
     environment:
       PORT: "4000"
       NATS_URL: ${NATS_URL:-nats://nats:4222}
@@ -43,7 +44,8 @@ services:
   worker:
     build:
       context: .
-      dockerfile: docker/Dockerfile.worker
+      dockerfile: docker/Dockerfile
+      target: worker
     environment:
       NATS_URL: ${NATS_URL:-nats://nats:4222}
       DATABASE_URL: ${DATABASE_URL:-postgresql://feedeater:feedeater@postgres:5432/feedeater}
@@ -64,7 +66,8 @@ services:
   web:
     build:
       context: .
-      dockerfile: docker/Dockerfile.web
+      dockerfile: docker/Dockerfile
+      target: web
     environment:
       PORT: "3000"
       NEXT_PUBLIC_BASE_PATH: ""

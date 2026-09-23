@@ -7,6 +7,11 @@ Short, stable definitions for core concepts. Intended for humans and AI agents.
 - **Module**: A plugin under `modules/<name>/` that owns its own settings and private
   Postgres schema (`mod_<name>`). Modules publish events and run jobs.
 - **Module Runtime**: The entrypoint (`runtime.entry`) that exposes job handlers for a module.
+- **Module Runner**: The per-module process/container (one per module, via compose profiles)
+  that boots the module-sdk, declares the module's jobs, and executes them — modules never
+  share a process with the platform or each other.
+- **Platform Config Registry**: Platform-owned system settings (formerly `modules/system`),
+  defined in `packages/core` and surfaced in the UI like a module, but not loaded as a runtime.
 - **Settings**: Key/value config stored in Postgres and managed via the API. Secrets are
   encrypted at rest.
 - **Event Bus**: NATS JetStream subjects (`feedeater.<module>.<event>`) used for
@@ -24,8 +29,13 @@ Short, stable definitions for core concepts. Intended for humans and AI agents.
 - **FollowMePanel**: Module-provided drill-down panel association for a message.
 - **Realtime Flag**: A transient boolean on `NormalizedMessage` (`realtime: true`)
   indicating a first-time live emission (not replay).
-- **AI Summary Endpoint**: Internal API that runs the model and returns a raw response string; modules own prompts and parsing.
+- **AI Summary Endpoint**: Internal API that submits prompts to the configured OpenAI-compatible inference provider (vLLM, TogetherAI, OpenAI, …) and returns a raw response string; modules own prompts and parsing. FeedEater never serves models itself.
 - **Hotlink Normalization**: Module-side conversion of source link formats into a common, clickable format in the UI.
+- **User**: Identity for human sessions, derived from a validated Teleport JWT
+  (`username` claim). In `single-user` Auth Mode all sessions resolve to the fixed
+  User `local`.
+- **Auth Mode**: Deployment switch (`FEED_AUTH_MODE`): `teleport` validates Teleport
+  JWTs on every request; `single-user` disables auth for development/headless use.
 
 ## Persistence (Postgres)
 
@@ -38,6 +48,8 @@ Short, stable definitions for core concepts. Intended for humans and AI agents.
 - **JobState** (`job_states`): Last-run and last-error state for each module job.
 - **BusReemitDedupe** (`bus_reemit_dedupe`): Dedupe table for startup re-emit so
   only missing messages are re-published to NATS.
+- **UserPref** (`user_prefs`): Per-User key/value view preferences (dashboard
+  filters, limits) stored in Postgres; managed via `/api/prefs`.
 
 ## Jobs and Scheduling
 
@@ -49,7 +61,10 @@ Short, stable definitions for core concepts. Intended for humans and AI agents.
 
 ## Realtime + Replay
 
-- **Live Stream**: SSE endpoints that subscribe to NATS subjects for realtime UI.
+- **Live Stream**: The multiplexed `/api/stream` SSE endpoint that pushes bus, log,
+  and narrative events to the web UI in realtime.
+- **Stream Hub**: Single per-process NATS subscription per subject that decodes and
+  enriches each event once, then fans out to all connected Live Stream clients.
 - **History**: Postgres-backed message archive used for lookback and filtering.
 - **Startup Re-emit**: On worker start, recent archived messages are re-published
   to NATS to rebuild the live feed.

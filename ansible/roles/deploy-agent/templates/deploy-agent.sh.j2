@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# feedeater-deploy-agent: converge this host to the latest GHCR images.
+# Pull-based by design — CI has no access to this box; the box pulls, nothing pushes.
+set -euo pipefail
+
+ROOT="{{ deploy_agent_root }}"
+PROJECT="{{ deploy_agent_project }}"
+TAG="{{ deploy_agent_image_tag }}"
+HEALTH_URL="{{ deploy_agent_health_url }}"
+COMPOSE_FILE="$ROOT/docker-compose.prod.yml"
+DC=(docker compose --file "$COMPOSE_FILE" --project-name "$PROJECT")
+
+REFS=({% for ref in deploy_agent_refs %}"{{ ref }}" {% endfor %})
+
+log() { echo "[deploy-agent] $*"; }
+
+# Nothing to converge until Ansible has placed the compose file.
+[ -f "$COMPOSE_FILE" ] || exit 0
+
+# Record current image IDs per ref for rollback.
+declare -A OLD
+for ref in "${REFS[@]}"; do
+  OLD[$ref]="$(docker image inspect --format '{{"{{ .Id }}"}}' "$ref:$TAG" 2>/dev/null || true)"
+done
+
+log "pulling :$TAG images"
+"${DC[@]}" pull --quiet
+
+# Migrations (interim: prisma db push via the api image; plan 03 replaces with drizzle-kit).
+"${DC[@]}" run --rm --workdir /app api npx prisma db push --schema packages/db/prisma/schema.prisma
+
+"${DC[@]}" up -d --remove-orphans
+
+# Health gate (~2.5 minutes).
+for _ in $(seq 1 30); do
+  if curl -fsS "$HEALTH_URL" >/dev/null 2>&1; then
+    log "healthy"
+    exit 0
+  fi
+  sleep 5
+done
+
+log "health check failed at $HEALTH_URL — rolling back to previous image IDs"
+for ref in "${REFS[@]}"; do
+  if [ -n "${OLD[$ref]:-}" ]; then
+    docker tag "${OLD[$ref]}" "$ref:$TAG" || true
+  fi
+done
+"${DC[@]}" up -d
+exit 1

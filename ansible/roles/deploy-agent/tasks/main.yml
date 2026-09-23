@@ -1,0 +1,73 @@
+# Installs the pull-based deploy agent: converger script + systemd timer.
+# Idempotent and safe to re-run (agent.md: re-deployable).
+
+- name: Create deploy directory
+  ansible.builtin.file:
+    path: "{{ deploy_agent_root }}"
+    state: directory
+    owner: root
+    group: docker
+    mode: "0750"
+
+- name: Place production compose file
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker-compose.prod.yml"
+    dest: "{{ deploy_agent_root }}/docker-compose.prod.yml"
+    owner: root
+    group: docker
+    mode: "0640"
+  notify: Restart deploy agent
+
+- name: Place Caddyfile
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker/Caddyfile"
+    dest: "{{ deploy_agent_root }}/Caddyfile"
+    owner: root
+    group: docker
+    mode: "0640"
+  notify: Restart deploy agent
+
+- name: Write .env from deployment vars
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ deploy_agent_root }}/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+  no_log: true
+  notify: Restart deploy agent
+
+- name: Log in to GHCR (only when packages are private)
+  ansible.builtin.command:
+    cmd: docker login ghcr.io -u "{{ ghcr_user }}" --password-stdin
+    stdin: "{{ ghcr_pat }}"
+  when: ghcr_pat is defined and (ghcr_pat | length > 0)
+  no_log: true
+  changed_when: false
+
+- name: Install converger script
+  ansible.builtin.template:
+    src: deploy-agent.sh.j2
+    dest: /usr/local/sbin/feedeater-deploy-agent
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - deploy-agent.service
+    - deploy-agent.timer
+  notify: Reload systemd and restart timer
+
+- name: Enable and start the timer
+  ansible.builtin.systemd:
+    name: deploy-agent.timer
+    enabled: true
+    state: started
+    daemon_reload: true

@@ -1,0 +1,14 @@
+- name: Install FeedEater deploy agent (AMD64 host)
+  hosts: feedeater
+  become: true
+  vars:
+    # vLLM is remote now (the DGX Spark is inference-only); requires the host on the tailnet.
+    feedeater_env:
+      FEED_SETTINGS_KEY: "{{ lookup('env', 'FEED_SETTINGS_KEY') }}"
+      FEED_INTERNAL_TOKEN: "{{ lookup('env', 'FEED_INTERNAL_TOKEN') }}"
+      AI_BASE_URL: "http://spark-ddb1.tailbdd59.ts.net:8888/v1"
+      AI_EMBED_BASE_URL: "http://spark-ddb1.tailbdd59.ts.net:8889/v1"
+      AI_EMBED_DIM: "768"
+  roles:
+    - docker
+    - deploy-agent

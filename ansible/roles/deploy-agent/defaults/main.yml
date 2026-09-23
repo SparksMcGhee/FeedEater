@@ -1,0 +1,11 @@
+# Defaults for the deploy-agent role. Override via group_vars or -e as needed.
+
+deploy_agent_root: /opt/feedeater
+deploy_agent_project: feedeater
+deploy_agent_image_tag: main
+deploy_agent_interval: 2min
+deploy_agent_health_url: http://127.0.0.1:666/api/health
+deploy_agent_refs:
+  - ghcr.io/sparksmcghee/feedeater-api
+  - ghcr.io/sparksmcghee/feedeater-worker
+  - ghcr.io/sparksmcghee/feedeater-web

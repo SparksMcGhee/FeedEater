@@ -1,0 +1,86 @@
+# Production compose: pulls GHCR images built by CI (see .github/workflows/build.yml).
+# Local dev builds stay in docker-compose.yml. Converged on the host by the deploy
+# agent (ansible/roles/deploy-agent) — the box pulls, CI never touches it.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-feedeater}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-feedeater}
+      POSTGRES_DB: ${POSTGRES_DB:-feedeater}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/data"]
+    volumes:
+      - nats_data:/data
+
+  api:
+    image: ghcr.io/sparksmcghee/feedeater-api:${IMAGE_TAG:-main}
+    environment:
+      PORT: "4000"
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://feedeater:feedeater@postgres:5432/feedeater}
+      FEED_SETTINGS_KEY: ${FEED_SETTINGS_KEY:?FEED_SETTINGS_KEY is required}
+      FEED_MODULES_DIR: /app/modules
+      FEED_INTERNAL_TOKEN: ${FEED_INTERNAL_TOKEN:?FEED_INTERNAL_TOKEN is required}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_EMBED_BASE_URL: ${AI_EMBED_BASE_URL:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+
+  worker:
+    image: ghcr.io/sparksmcghee/feedeater-worker:${IMAGE_TAG:-main}
+    environment:
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://feedeater:feedeater@postgres:5432/feedeater}
+      FEED_MODULES_DIR: /app/modules
+      FEED_INTERNAL_TOKEN: ${FEED_INTERNAL_TOKEN:?FEED_INTERNAL_TOKEN is required}
+      FEED_API_BASE_URL: ${FEED_API_BASE_URL:-http://api:4000}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_EMBED_BASE_URL: ${AI_EMBED_BASE_URL:-}
+      AI_EMBED_DIM: ${AI_EMBED_DIM:-768}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+
+  web:
+    image: ghcr.io/sparksmcghee/feedeater-web:${IMAGE_TAG:-main}
+    environment:
+      PORT: "3000"
+      NEXT_PUBLIC_BASE_PATH: ""
+    depends_on:
+      api:
+        condition: service_started
+
+  proxy:
+    image: caddy:2-alpine
+    ports:
+      - "666:666"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  nats_data:

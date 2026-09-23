@@ -1,0 +1,10 @@
+[Unit]
+Description=FeedEater deploy agent timer
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ deploy_agent_interval }}
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

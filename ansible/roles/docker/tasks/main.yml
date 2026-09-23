@@ -16,7 +16,7 @@
   ansible.builtin.apt:
     name:
       - docker.io
-      - docker-compose-plugin
+      - docker-compose-v2
     state: present
     update_cache: true
   when: docker_version.rc != 0 or docker_compose_version.rc != 0

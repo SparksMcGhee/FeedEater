@@ -1,0 +1,10 @@
+- name: Reload systemd and restart timer
+  ansible.builtin.systemd:
+    name: deploy-agent.timer
+    daemon_reload: true
+    state: restarted
+
+- name: Restart deploy agent
+  ansible.builtin.systemd:
+    name: deploy-agent.service
+    state: started

@@ -53,6 +53,15 @@
   no_log: true
   changed_when: false
 
+- name: Place postgres init scripts (pgvector extension on fresh volumes)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../docker/postgres-init/"
+    dest: "{{ deploy_agent_root }}/docker/postgres-init/"
+    owner: root
+    group: docker
+    mode: "0640"
+  notify: Restart deploy agent
+
 - name: Install converger script
   ansible.builtin.template:
     src: deploy-agent.sh.j2

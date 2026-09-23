@@ -43,7 +43,15 @@ jobs:
           echo "API never became healthy"
           exit 1
       - name: Check web UI serves
-        run: curl -fsS http://localhost:666/ -o /dev/null
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:666/ -o /dev/null; then
+              echo "web serving"; exit 0
+            fi
+            sleep 3
+          done
+          echo "web never served 200"
+          exit 1
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs --tail=200

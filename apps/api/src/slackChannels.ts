@@ -27,9 +27,9 @@ export type SlackChannelSummary = {
   isPrivate: boolean;
   isMember: boolean;
   isArchived: boolean;
-  numMembers?: number;
-  purpose?: string;
-  topic?: string;
+  numMembers?: number | undefined;
+  purpose?: string | undefined;
+  topic?: string | undefined;
 };
 
 async function loadSlackBotToken(): Promise<string> {

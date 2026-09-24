@@ -19,13 +19,13 @@ All decision points in plans 01–04 are resolved. This doc is the execution ord
 Goal: `main` is protected and the repo is ready for CI. (No runner to commission —
 hosted runners + the pull-based deploy agent removed the last box-side prerequisite.)
 
-- [ ] Inventory: new `[feedeater]` group in `ansible/inventory.ini` for the AMD64
+- [x] Inventory: new `[feedeater]` group in `ansible/inventory.ini` for the AMD64
   hypervisor host (x86_64, same fleet as `botpen`). The DGX Spark is retired as the
   app deploy target — it stays inference-only (vLLM)
 - [ ] Branch protection on `main`: PRs required; required status checks added once
   `ci.yml` lands in Phase 1. (Public repo: fork PRs run on hosted runners — keep
   secrets out of PR-triggered workflows; push jobs stay `main`-only.)
-- [ ] `.env.example` (plan 01 to-do; `Makefile:deploy` already references it)
+- [x] `.env.example` (plan 01 to-do; `Makefile:deploy` already references it)
 
 **Exit:** nothing merges to `main` without a PR.
 
@@ -34,18 +34,18 @@ hosted runners + the pull-based deploy agent removed the last box-side prerequis
 Goal: deploy the **current, unmodified app** via cloud CI + the deploy agent. Prove
 the mechanics on a known-good system before app changes can confound debugging.
 
-- [ ] Reproducible Dockerfiles (plan 01): `COPY package-lock.json` + `npm ci` in all
+- [x] Reproducible Dockerfiles (plan 01): `COPY package-lock.json` + `npm ci` in all
   three; dedupe into one parameterized file / shared base stage
-- [ ] `.github/workflows/ci.yml` (hosted, PRs): `npm ci` → `tsc --noEmit` →
+- [x] `.github/workflows/ci.yml` (hosted, PRs): `npm ci` → `tsc --noEmit` →
   `docker compose build` sanity → full-stack compose smoke (up → `/api/health` → web
   200 → down) as the seed of acceptance gate 3. Lint/test stages light up in Phase 2
-- [ ] `.github/workflows/build.yml` (hosted, `main` only): buildx amd64 with GHA cache →
+- [x] `.github/workflows/build.yml` (hosted, `main` only): buildx amd64 with GHA cache →
   push `ghcr.io/sparksmcghee/feedeater-{api,worker,web}:<sha>` → compose-up those exact
   images → smoke → only then tag `:main` (image qualification, gate 4 — the deploy
   agent only ever pulls `:main`, so on-prem never runs an unqualified image)
-- [ ] `docker-compose.prod.yml`: `image:` tags (`${IMAGE_TAG:-main}`) replacing `build:`;
+- [x] `docker-compose.prod.yml`: `image:` tags (`${IMAGE_TAG:-main}`) replacing `build:`;
   dev compose keeps `build:`
-- [ ] Ansible `deploy-agent` role + `deploy-agent.yml`: places `docker-compose.prod.yml`
+- [x] Ansible `deploy-agent` role + `deploy-agent.yml`: places `docker-compose.prod.yml`
   + `docker/Caddyfile` + `.env` on the AMD64 host, installs the converger script as a
   systemd timer (default 2 min), optional GHCR login if packages are ever private
 - [ ] Cut over: point the host at GHCR images; keep `make deploy` (rsync) as a legacy

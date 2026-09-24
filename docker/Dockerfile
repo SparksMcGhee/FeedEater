@@ -3,7 +3,7 @@
 # (dev compose uses `target:`; CI builds with docker/build-push-action).
 
 # ---- deps: install from the lockfile --------------------------------------
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
@@ -41,7 +41,7 @@ FROM build AS build-web
 RUN npm run -w @feedeater/web build
 
 # ---- final images ------------------------------------------------------------
-FROM node:20-alpine AS api
+FROM node:24-alpine AS api
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build-api /app/package.json ./package.json
@@ -58,7 +58,7 @@ EXPOSE 4000
 WORKDIR /app/apps/api
 CMD ["node", "dist/index.js"]
 
-FROM node:20-alpine AS worker
+FROM node:24-alpine AS worker
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build-worker /app/node_modules ./node_modules
@@ -72,7 +72,7 @@ COPY --from=build-worker /app/apps/worker/dist ./apps/worker/dist
 WORKDIR /app/apps/worker
 CMD ["node", "dist/index.js"]
 
-FROM node:20-alpine AS web
+FROM node:24-alpine AS web
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build-web /app/node_modules ./node_modules

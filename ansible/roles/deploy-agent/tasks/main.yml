@@ -9,13 +9,13 @@
     group: docker
     mode: "0750"
 
-- name: Create docker subdir for Caddyfile placement
+- name: Create docker subdir for container-mounted files (must be traversable by container uids)
   ansible.builtin.file:
     path: "{{ deploy_agent_root }}/docker"
     state: directory
     owner: root
     group: docker
-    mode: "0750"
+    mode: "0755"
 
 - name: Place production compose file
   ansible.builtin.copy:
@@ -23,7 +23,7 @@
     dest: "{{ deploy_agent_root }}/docker-compose.prod.yml"
     owner: root
     group: docker
-    mode: "0640"
+    mode: "0644"
   notify: Restart deploy agent
 
 - name: Place Caddyfile
@@ -32,7 +32,7 @@
     dest: "{{ deploy_agent_root }}/docker/Caddyfile"
     owner: root
     group: docker
-    mode: "0640"
+    mode: "0644"
   notify: Restart deploy agent
 
 - name: Write .env from deployment vars
@@ -53,13 +53,21 @@
   no_log: true
   changed_when: false
 
+- name: Create postgres-init dir (readable by the postgres container uid)
+  ansible.builtin.file:
+    path: "{{ deploy_agent_root }}/docker/postgres-init"
+    state: directory
+    owner: root
+    group: docker
+    mode: "0755"
+
 - name: Place postgres init scripts (pgvector extension on fresh volumes)
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../docker/postgres-init/"
     dest: "{{ deploy_agent_root }}/docker/postgres-init/"
     owner: root
     group: docker
-    mode: "0640"
+    mode: "0644"
   notify: Restart deploy agent
 
 - name: Install converger script

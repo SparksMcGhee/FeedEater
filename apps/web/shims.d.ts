@@ -4,6 +4,7 @@
 declare module "react" {
   export type ReactNode = any;
 
+  // biome-ignore lint/suspicious/noConfusingVoidType: mirrors React's EffectCallback return union (void | Destructor)
   export function useEffect(effect: (...args: any[]) => void | (() => void), deps?: any[]): void;
   export function useMemo<T>(factory: () => T, deps?: any[]): T;
   export function useRef<T>(initial: T): { current: T };
@@ -25,9 +26,3 @@ declare namespace JSX {
     [elemName: string]: any;
   }
 }
-
-
-
-
-
-

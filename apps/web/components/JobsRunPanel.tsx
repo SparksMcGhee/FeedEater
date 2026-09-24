@@ -18,7 +18,9 @@ type ModuleJob = {
 
 type ModuleManifestWithJobs = ModuleManifest & { jobs?: ModuleJob[] };
 
-type RunJobResponse = { ok: true; jobId: string | number; queue: string; job: string; module: string } | { ok: false; error: string };
+type RunJobResponse =
+  | { ok: true; jobId: string | number; queue: string; job: string; module: string }
+  | { ok: false; error: string };
 type JobStatus = {
   module: string;
   job: string;
@@ -93,7 +95,7 @@ export function JobsRunPanel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadStatus]);
 
   const grouped = useMemo(() => {
     const byModule = new Map<string, ModuleJob[]>();
@@ -143,7 +145,14 @@ export function JobsRunPanel() {
         background: "rgba(255,255,255,0.03)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "baseline",
+        }}
+      >
         <div style={{ fontWeight: 700 }}>Run now</div>
         <div className="muted" style={{ fontSize: 12 }}>
           Manual triggers are enabled for all jobs
@@ -151,10 +160,14 @@ export function JobsRunPanel() {
       </div>
 
       {result.__load ? (
-        <div style={{ marginTop: 8, color: "rgba(255,120,120,0.9)", fontSize: 12 }}>{result.__load}</div>
+        <div style={{ marginTop: 8, color: "rgba(255,120,120,0.9)", fontSize: 12 }}>
+          {result.__load}
+        </div>
       ) : null}
       {result.__status ? (
-        <div style={{ marginTop: 6, color: "rgba(255,160,120,0.9)", fontSize: 12 }}>{result.__status}</div>
+        <div style={{ marginTop: 6, color: "rgba(255,160,120,0.9)", fontSize: 12 }}>
+          {result.__status}
+        </div>
       ) : null}
 
       <div style={{ height: 10 }} />
@@ -184,10 +197,10 @@ export function JobsRunPanel() {
                     status === "running"
                       ? "rgba(80,160,255,0.9)"
                       : status === "error"
-                      ? "rgba(255,120,120,0.9)"
-                      : statusByKey[key]?.lastSuccessAt
-                      ? "rgba(120,255,180,0.9)"
-                      : "rgba(160,160,160,0.7)";
+                        ? "rgba(255,120,120,0.9)"
+                        : statusByKey[key]?.lastSuccessAt
+                          ? "rgba(120,255,180,0.9)"
+                          : "rgba(160,160,160,0.7)";
                   return (
                     <div
                       key={key}
@@ -198,7 +211,14 @@ export function JobsRunPanel() {
                         background: "rgba(0,0,0,0.18)",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          alignItems: "baseline",
+                        }}
+                      >
                         <div style={{ fontWeight: 700 }}>
                           <span
                             style={{
@@ -272,15 +292,26 @@ export function JobsRunPanel() {
                                 }}
                               >
                                 <div className="muted">{k}</div>
-                                <div style={{ wordBreak: "break-word" }}>{formatMetricValue(k, v)}</div>
+                                <div style={{ wordBreak: "break-word" }}>
+                                  {formatMetricValue(k, v)}
+                                </div>
                               </div>
                             ))}
                           </div>
                         </div>
                       ) : null}
 
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          alignItems: "center",
+                          marginTop: 10,
+                          flexWrap: "wrap",
+                        }}
+                      >
                         <button
+                          type="button"
                           onClick={() => void runNow(moduleName, job.name)}
                           disabled={busy}
                           style={{
@@ -301,7 +332,9 @@ export function JobsRunPanel() {
                             className="muted"
                             style={{
                               fontSize: 12,
-                              color: msg.startsWith("Enqueued") ? "rgba(170,255,200,0.9)" : "rgba(255,120,120,0.9)",
+                              color: msg.startsWith("Enqueued")
+                                ? "rgba(170,255,200,0.9)"
+                                : "rgba(255,120,120,0.9)",
                             }}
                           >
                             {msg}
@@ -319,5 +352,3 @@ export function JobsRunPanel() {
     </div>
   );
 }
-
-

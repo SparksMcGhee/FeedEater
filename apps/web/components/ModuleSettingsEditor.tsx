@@ -41,21 +41,30 @@ export function ModuleSettingsEditor(props: {
     setError((p: Record<string, string>) => ({ ...p, [def.key]: "" }));
     try {
       const value = draft[def.key] ?? "";
-      const res = await fetch(`/api/settings/${encodeURIComponent(props.moduleName)}/${encodeURIComponent(def.key)}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          value,
-          isSecret: def.type === "secret",
-        }),
-      });
+      const res = await fetch(
+        `/api/settings/${encodeURIComponent(props.moduleName)}/${encodeURIComponent(def.key)}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            value,
+            isSecret: def.type === "secret",
+          }),
+        },
+      );
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new Error(`Save failed (${res.status}) ${body}`);
       }
-      setSavedAt((p: Record<string, string>) => ({ ...p, [def.key]: new Date().toLocaleTimeString() }));
+      setSavedAt((p: Record<string, string>) => ({
+        ...p,
+        [def.key]: new Date().toLocaleTimeString(),
+      }));
     } catch (e) {
-      setError((p: Record<string, string>) => ({ ...p, [def.key]: e instanceof Error ? e.message : String(e) }));
+      setError((p: Record<string, string>) => ({
+        ...p,
+        [def.key]: e instanceof Error ? e.message : String(e),
+      }));
     } finally {
       setSaving((p: Record<string, boolean>) => ({ ...p, [def.key]: false }));
     }
@@ -99,7 +108,14 @@ export function ModuleSettingsEditor(props: {
                 background: "rgba(255,255,255,0.03)",
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "baseline",
+                }}
+              >
                 <div style={{ fontWeight: 700 }}>{def.key}</div>
                 <div className="muted" style={{ fontSize: 12 }}>
                   {def.type}
@@ -115,7 +131,10 @@ export function ModuleSettingsEditor(props: {
                   value={draft[def.key] ?? ""}
                   placeholder={placeholder}
                   onChange={(e) =>
-                    setDraft((p: Record<string, string>) => ({ ...p, [def.key]: (e.target as any).value }))
+                    setDraft((p: Record<string, string>) => ({
+                      ...p,
+                      [def.key]: (e.target as any).value,
+                    }))
                   }
                   style={{
                     flex: "1 1 340px",
@@ -130,6 +149,7 @@ export function ModuleSettingsEditor(props: {
                 />
 
                 <button
+                  type="button"
                   onClick={() => void saveOne(def)}
                   disabled={Boolean(saving[def.key])}
                   style={{
@@ -147,7 +167,9 @@ export function ModuleSettingsEditor(props: {
               </div>
 
               {error[def.key] ? (
-                <div style={{ marginTop: 8, color: "rgba(255,120,120,0.9)", fontSize: 12 }}>{error[def.key]}</div>
+                <div style={{ marginTop: 8, color: "rgba(255,120,120,0.9)", fontSize: 12 }}>
+                  {error[def.key]}
+                </div>
               ) : null}
 
               {savedAt[def.key] ? (
@@ -162,5 +184,3 @@ export function ModuleSettingsEditor(props: {
     </div>
   );
 }
-
-

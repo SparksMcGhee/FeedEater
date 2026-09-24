@@ -26,9 +26,3 @@ export function ModuleTabs(props: { modules: Array<{ name: string }>; current: s
     </div>
   );
 }
-
-
-
-
-
-

@@ -7,5 +7,3 @@ export const ExampleSettingsSchema = z.object({
 });
 
 export type ExampleSettings = z.infer<typeof ExampleSettingsSchema>;
-
-

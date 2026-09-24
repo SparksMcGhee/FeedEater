@@ -1,5 +1,5 @@
-import { pathToFileURL } from "node:url";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import type { ModuleRuntime } from "@feedeater/module-sdk";
 
@@ -20,5 +20,3 @@ export async function loadModuleRuntime(params: {
   }
   return runtime;
 }
-
-

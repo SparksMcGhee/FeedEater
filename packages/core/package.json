@@ -13,8 +13,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"(no lint configured yet)\""
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "zod": "^3.25.76"

@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
 import { prisma } from "@feedeater/db";
+import type { Request, Response } from "express";
 
 import { decryptSecret } from "./crypto.js";
 
@@ -36,7 +36,7 @@ async function loadSlackBotToken(): Promise<string> {
   const row = await prisma.setting.findUnique({
     where: { module_key: { module: "slack", key: "botToken" } },
   });
-  if (!row || !row.value) {
+  if (!row?.value) {
     const err = new Error('Slack setting "botToken" is required');
     (err as any).statusCode = 400;
     throw err;
@@ -62,7 +62,10 @@ async function slackGet<T>(token: string, url: URL): Promise<T> {
   return data;
 }
 
-async function listSlackChannels(token: string, opts: { includeArchived: boolean; types: string[] }) {
+async function listSlackChannels(
+  token: string,
+  opts: { includeArchived: boolean; types: string[] },
+) {
   const out: SlackChannelSummary[] = [];
 
   let cursor = "";
@@ -90,7 +93,8 @@ async function listSlackChannels(token: string, opts: { includeArchived: boolean
         const hints: string[] = [];
         if (opts.types.includes("public_channel")) hints.push("channels:read");
         if (opts.types.includes("private_channel")) hints.push("groups:read");
-        if (hints.length) bits.push(`hint: add OAuth scope(s) ${hints.join(", ")} and reinstall the app`);
+        if (hints.length)
+          bits.push(`hint: add OAuth scope(s) ${hints.join(", ")} and reinstall the app`);
       }
 
       const err = new Error(bits.join(" · "));
@@ -147,5 +151,3 @@ export async function getSlackChannels(req: Request, res: Response) {
     res.status(status).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
   }
 }
-
-

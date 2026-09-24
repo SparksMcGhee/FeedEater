@@ -1,15 +1,15 @@
-import express from "express";
-import type { NextFunction, Request, Response } from "express";
-import { connect, StringCodec } from "nats";
 import { prisma } from "@feedeater/db";
-import { getModuleSettings, getModuleSettingsInternal, putModuleSetting } from "./settings.js";
+import type { NextFunction, Request, Response } from "express";
+import express from "express";
+import { connect, StringCodec } from "nats";
 import { getAiTags, postAiEmbedding, postAiSummary } from "./ai.js";
-import { getNarrativeMessages, getNarrativesHistory, getNarrativesStream } from "./narratives.js";
-import { discoverModules } from "./modules.js";
-import { getSlackChannels } from "./slackChannels.js";
-import { getLogsStream } from "./logsStream.js";
-import { getJobsStatus, postRunJob } from "./jobs.js";
 import { getBusHistory } from "./busHistory.js";
+import { getJobsStatus, postRunJob } from "./jobs.js";
+import { getLogsStream } from "./logsStream.js";
+import { discoverModules } from "./modules.js";
+import { getNarrativeMessages, getNarrativesHistory, getNarrativesStream } from "./narratives.js";
+import { getModuleSettings, getModuleSettingsInternal, putModuleSetting } from "./settings.js";
+import { getSlackChannels } from "./slackChannels.js";
 
 const PORT = Number(process.env.PORT ?? "4000");
 const MODULES_DIR = process.env.FEED_MODULES_DIR ?? "/app/modules";
@@ -38,7 +38,7 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
 
 // Permit embedding internal UI panels (same-origin iframe).
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((_req: Request, res: Response, next: NextFunction) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Content-Security-Policy", "frame-ancestors 'self'");
   next();
@@ -98,7 +98,12 @@ app.get("/api/bus/stream", async (req: Request, res: Response) => {
           const ref = msg?.narrativeRef ?? msg?.contextRef;
           if (ref?.ownerModule && ref?.sourceKey) {
             const nv = await prisma.busNarrative.findUnique({
-              where: { ownerModule_sourceKey: { ownerModule: String(ref.ownerModule), sourceKey: String(ref.sourceKey) } },
+              where: {
+                ownerModule_sourceKey: {
+                  ownerModule: String(ref.ownerModule),
+                  sourceKey: String(ref.sourceKey),
+                },
+              },
               select: { summaryShort: true },
             });
             narrativeSummaryShort = nv?.summaryShort ?? null;
@@ -151,5 +156,3 @@ app.listen(PORT, "0.0.0.0", () => {
   // eslint-disable-next-line no-console
   console.log(`[api] listening on :${PORT}`);
 });
-
-

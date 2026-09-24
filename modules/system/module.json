@@ -39,8 +39,5 @@
     { "key": "narrative_top_k", "type": "number", "default": 20 },
     { "key": "dashboard_show_ids", "type": "boolean", "default": false }
   ],
-  "cards": [
-    { "id": "systemStatus", "title": "System" }
-  ]
+  "cards": [{ "id": "systemStatus", "title": "System" }]
 }
-

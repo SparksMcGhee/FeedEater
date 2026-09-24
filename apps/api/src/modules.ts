@@ -43,5 +43,3 @@ export async function discoverModules(modulesDir: string): Promise<ModuleManifes
   modules.sort((a, b) => a.name.localeCompare(b.name));
   return modules;
 }
-
-

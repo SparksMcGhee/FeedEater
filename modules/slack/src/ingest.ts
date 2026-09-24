@@ -1,8 +1,12 @@
+import {
+  MessageCreatedEventSchema,
+  NarrativeUpdatedEventSchema,
+  NormalizedMessageSchema,
+  subjectFor,
+} from "@feedeater/core";
 import { WebClient } from "@slack/web-api";
-import type { Pool } from "pg";
 import type { NatsConnection, StringCodec } from "nats";
-
-import { MessageCreatedEventSchema, NarrativeUpdatedEventSchema, NormalizedMessageSchema, subjectFor } from "@feedeater/core";
+import type { Pool } from "pg";
 
 import { slackSourceIdToBusMessageId } from "./slackMessageIds.js";
 
@@ -43,7 +47,9 @@ export function parseSlackSettingsFromInternal(raw: Record<string, unknown>): Sl
   const includeThreads = String(raw.includeThreads ?? "true") !== "false";
   const excludeBots = String(raw.excludeBots ?? "true") !== "false";
   const nonThreadNarrativeTemplate = String(
-    raw.nonThreadNarrativeTemplate ?? raw.nonThreadContextTemplate ?? "Message in channel {channel}"
+    raw.nonThreadNarrativeTemplate ??
+      raw.nonThreadContextTemplate ??
+      "Message in channel {channel}",
   );
   const channelNameMapRaw = String(raw.channelNameMap ?? "{}");
   const defaultNarrativePrompt =
@@ -53,12 +59,13 @@ export function parseSlackSettingsFromInternal(raw: Record<string, unknown>): Sl
   const narrativePrompt =
     String(raw.narrativePrompt ?? raw.contextPrompt ?? "").trim() || defaultNarrativePrompt;
   const narrativePromptFallback =
-    String(raw.narrativePromptFallback ?? raw.contextPromptFallback ?? "").trim() || defaultNarrativePromptFallback;
+    String(raw.narrativePromptFallback ?? raw.contextPromptFallback ?? "").trim() ||
+    defaultNarrativePromptFallback;
   let channelNameMap: Record<string, string> = {};
   try {
     const parsed = JSON.parse(channelNameMapRaw) as Record<string, unknown>;
     channelNameMap = Object.fromEntries(
-      Object.entries(parsed ?? {}).map(([k, v]) => [String(k), String(v)])
+      Object.entries(parsed ?? {}).map(([k, v]) => [String(k), String(v)]),
     );
   } catch {
     throw new Error('Slack setting "channelNameMap" must be valid JSON');
@@ -104,8 +111,8 @@ export class SlackIngestor {
             at: new Date().toISOString(),
             message,
             meta,
-          })
-        )
+          }),
+        ),
       );
     } catch {
       // ignore
@@ -117,7 +124,7 @@ export class SlackIngestor {
     private readonly db: Pool,
     private readonly nats: NatsConnection,
     private readonly sc: StringCodec,
-    opts: { apiBaseUrl: string; internalToken: string; narrativeTopK: number; embedDim: number }
+    opts: { apiBaseUrl: string; internalToken: string; narrativeTopK: number; embedDim: number },
   ) {
     this.slack = new WebClient(settings.botToken);
     this.apiBaseUrl = opts.apiBaseUrl.replace(/\/+$/, "");
@@ -145,14 +152,19 @@ export class SlackIngestor {
 
   private async fetchThreadReplies(channelId: string, threadTs: string): Promise<SlackMessage[]> {
     try {
-      const result = await this.slack.conversations.replies({ channel: channelId, ts: threadTs, limit: 100 });
+      const result = await this.slack.conversations.replies({
+        channel: channelId,
+        ts: threadTs,
+        limit: 100,
+      });
       if (!result.messages || result.messages.length <= 1) return [];
 
       const replies: SlackMessage[] = [];
       for (let i = 1; i < result.messages.length; i++) {
         const m = result.messages[i];
-        if (!m || !m.ts || !m.user) continue;
-        const textRaw = m.text != null && String(m.text).trim() !== "" ? String(m.text) : "(no text)";
+        if (!m?.ts || !m.user) continue;
+        const textRaw =
+          m.text != null && String(m.text).trim() !== "" ? String(m.text) : "(no text)";
         const username = await this.resolveUsername(String(m.user));
         replies.push({
           text: this.normalizeSlackText(textRaw),
@@ -169,7 +181,9 @@ export class SlackIngestor {
       this.log(
         "warn",
         "failed to fetch thread replies (continuing)",
-        err instanceof Error ? { channelId, threadTs, name: err.name, message: err.message } : { channelId, threadTs, err }
+        err instanceof Error
+          ? { channelId, threadTs, name: err.name, message: err.message }
+          : { channelId, threadTs, err },
       );
       return [];
     }
@@ -188,7 +202,10 @@ export class SlackIngestor {
       this.log("info", "ai summary prompt", { prompt });
       const res = await fetch(`${this.apiBaseUrl}/api/internal/ai/summary`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${this.internalToken}` },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.internalToken}`,
+        },
         body: JSON.stringify({ prompt, system: this.settings.narrativePrompt, format: "json" }),
       });
       if (!res.ok) {
@@ -210,7 +227,11 @@ export class SlackIngestor {
         rawResponse,
       };
     } catch (err) {
-      this.log("error", "ai summary failed", err instanceof Error ? { message: err.message } : { err });
+      this.log(
+        "error",
+        "ai summary failed",
+        err instanceof Error ? { message: err.message } : { err },
+      );
       throw err;
     }
   }
@@ -223,7 +244,10 @@ export class SlackIngestor {
   }> {
     const res = await fetch(`${this.apiBaseUrl}/api/internal/ai/summary`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${this.internalToken}` },
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${this.internalToken}`,
+      },
       body: JSON.stringify({ prompt, system: this.settings.narrativePromptFallback }),
     });
     if (!res.ok) {
@@ -241,10 +265,15 @@ export class SlackIngestor {
     };
   }
 
-  private parseSummaryJson(rawResponse: string): { summaryShort: string; summaryLong: string } | null {
+  private parseSummaryJson(
+    rawResponse: string,
+  ): { summaryShort: string; summaryLong: string } | null {
     const trimmed = rawResponse.trim();
     const candidate = trimmed.startsWith("```")
-      ? trimmed.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim()
+      ? trimmed
+          .replace(/^```[a-zA-Z]*\n?/, "")
+          .replace(/```$/, "")
+          .trim()
       : trimmed;
     try {
       const parsed = JSON.parse(candidate) as { summary_short?: string; summary_long?: string };
@@ -262,15 +291,18 @@ export class SlackIngestor {
 
   private normalizeSlackText(text: string): string {
     if (!text) return text;
-    return text.replace(/<([^>|]+)(\|([^>]+))?>/g, (_full, link: string, _sep: string, label?: string) => {
-      const url = String(link ?? "");
-      const display = label ? String(label) : "";
-      if (/^(https?:\/\/|mailto:)/i.test(url)) {
-        return display ? `[${display}](${url})` : url;
-      }
-      if (display) return display;
-      return url;
-    });
+    return text.replace(
+      /<([^>|]+)(\|([^>]+))?>/g,
+      (_full, link: string, _sep: string, label?: string) => {
+        const url = String(link ?? "");
+        const display = label ? String(label) : "";
+        if (/^(https?:\/\/|mailto:)/i.test(url)) {
+          return display ? `[${display}](${url})` : url;
+        }
+        if (display) return display;
+        return url;
+      },
+    );
   }
 
   private async aiEmbed(text: string): Promise<number[]> {
@@ -280,15 +312,23 @@ export class SlackIngestor {
     try {
       const res = await fetch(`${this.apiBaseUrl}/api/internal/ai/embedding`, {
         method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${this.internalToken}` },
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${this.internalToken}`,
+        },
         body: JSON.stringify({ text }),
       });
       if (!res.ok) throw new Error(`ai embeddings failed (${res.status})`);
       const data = (await res.json()) as { embedding?: number[] };
-      if (!Array.isArray(data.embedding) || data.embedding.length === 0) throw new Error("empty embedding");
+      if (!Array.isArray(data.embedding) || data.embedding.length === 0)
+        throw new Error("empty embedding");
       return data.embedding;
     } catch (err) {
-      this.log("error", "ai embeddings failed", err instanceof Error ? { message: err.message } : { err });
+      this.log(
+        "error",
+        "ai embeddings failed",
+        err instanceof Error ? { message: err.message } : { err },
+      );
       throw err;
     }
   }
@@ -315,10 +355,16 @@ export class SlackIngestor {
         embedding: params.embedding,
       },
     });
-    this.nats.publish(subjectFor("slack", "narrativeUpdated"), this.sc.encode(JSON.stringify(narrativeEvent)));
+    this.nats.publish(
+      subjectFor("slack", "narrativeUpdated"),
+      this.sc.encode(JSON.stringify(narrativeEvent)),
+    );
   }
 
-  private async fetchChannelMessages(channelIds: string[], lookbackHours: number): Promise<SlackMessage[]> {
+  private async fetchChannelMessages(
+    channelIds: string[],
+    lookbackHours: number,
+  ): Promise<SlackMessage[]> {
     const messages: SlackMessage[] = [];
     const lookbackTime = Date.now() / 1000 - lookbackHours * 3600;
 
@@ -338,16 +384,20 @@ export class SlackIngestor {
         this.log(
           "error",
           "failed to fetch channel history (continuing)",
-          err instanceof Error ? { channelId, name: err.name, message: err.message, stack: err.stack } : { channelId, err }
+          err instanceof Error
+            ? { channelId, name: err.name, message: err.message, stack: err.stack }
+            : { channelId, err },
         );
         continue;
       }
 
       for (const m of result.messages ?? []) {
-        if (!m || !m.ts || !m.user) continue;
-        if (this.settings.excludeBots && (m.subtype === "bot_message" || (m as any).bot_id)) continue;
+        if (!m?.ts || !m.user) continue;
+        if (this.settings.excludeBots && (m.subtype === "bot_message" || (m as any).bot_id))
+          continue;
 
-        const textRaw = m.text != null && String(m.text).trim() !== "" ? String(m.text) : "(no text)";
+        const textRaw =
+          m.text != null && String(m.text).trim() !== "" ? String(m.text) : "(no text)";
         const username = await this.resolveUsername(String(m.user));
         const msg: SlackMessage = {
           text: this.normalizeSlackText(textRaw),
@@ -398,9 +448,11 @@ export class SlackIngestor {
         collected_at timestamptz NOT NULL DEFAULT now()
       )
     `);
-    await this.db.query(`CREATE INDEX IF NOT EXISTS slack_messages_ts_idx ON mod_slack.slack_messages (ts)`);
     await this.db.query(
-      `CREATE INDEX IF NOT EXISTS slack_messages_channel_ts_idx ON mod_slack.slack_messages (channel_id, ts)`
+      `CREATE INDEX IF NOT EXISTS slack_messages_ts_idx ON mod_slack.slack_messages (ts)`,
+    );
+    await this.db.query(
+      `CREATE INDEX IF NOT EXISTS slack_messages_channel_ts_idx ON mod_slack.slack_messages (channel_id, ts)`,
     );
 
     const embedDim = Number.isFinite(this.embedDim) ? this.embedDim : 4096;
@@ -435,16 +487,16 @@ export class SlackIngestor {
         ADD COLUMN IF NOT EXISTS embedding vector(${embedDim})
       `);
       await this.db.query(
-        `ALTER TABLE mod_slack.slack_message_embeddings ALTER COLUMN embedding TYPE vector(${embedDim}) USING embedding::vector`
+        `ALTER TABLE mod_slack.slack_message_embeddings ALTER COLUMN embedding TYPE vector(${embedDim}) USING embedding::vector`,
       );
     }
     await this.db.query(`DROP INDEX IF EXISTS slack_message_embeddings_context_idx`);
     await this.db.query(
-      `CREATE INDEX IF NOT EXISTS slack_message_embeddings_narrative_idx ON mod_slack.slack_message_embeddings (narrative_key, ts)`
+      `CREATE INDEX IF NOT EXISTS slack_message_embeddings_narrative_idx ON mod_slack.slack_message_embeddings (narrative_key, ts)`,
     );
     if (Number.isFinite(embedDim) && embedDim <= 2000) {
       await this.db.query(
-        `CREATE INDEX IF NOT EXISTS slack_message_embeddings_vec_idx ON mod_slack.slack_message_embeddings USING ivfflat (embedding vector_cosine_ops)`
+        `CREATE INDEX IF NOT EXISTS slack_message_embeddings_vec_idx ON mod_slack.slack_message_embeddings USING ivfflat (embedding vector_cosine_ops)`,
       );
     } else {
       await this.db.query(`DROP INDEX IF EXISTS slack_message_embeddings_vec_idx`);
@@ -453,8 +505,14 @@ export class SlackIngestor {
   }
 
   async collectAndPersist(): Promise<{ insertedOrUpdated: number; publishedNew: number }> {
-    this.log("info", "slack collect starting", { channelIds: this.settings.channelIds, lookbackHours: this.settings.lookbackHours });
-    const msgs = await this.fetchChannelMessages(this.settings.channelIds, this.settings.lookbackHours);
+    this.log("info", "slack collect starting", {
+      channelIds: this.settings.channelIds,
+      lookbackHours: this.settings.lookbackHours,
+    });
+    const msgs = await this.fetchChannelMessages(
+      this.settings.channelIds,
+      this.settings.lookbackHours,
+    );
     if (msgs.length === 0) return { insertedOrUpdated: 0, publishedNew: 0 };
 
     const client = await this.db.connect();
@@ -499,7 +557,7 @@ export class SlackIngestor {
             Boolean(m.isThreadReply),
             m.replyCount ?? null,
             m as any,
-          ]
+          ],
         )) as unknown as { rows: Array<{ inserted: boolean }> };
         count++;
 
@@ -508,7 +566,7 @@ export class SlackIngestor {
           const msgId = slackSourceIdToBusMessageId(sourceId);
           const narrativeKey = `${m.channel}:${m.threadTs ?? m.timestamp}`;
           const slackLink = `https://slack.com/app_redirect?channel=${encodeURIComponent(m.channel)}&message_ts=${encodeURIComponent(
-            m.threadTs ?? m.timestamp
+            m.threadTs ?? m.timestamp,
           )}`;
           const normalized = NormalizedMessageSchema.parse({
             id: msgId,
@@ -534,8 +592,14 @@ export class SlackIngestor {
               isThreadReply: Boolean(m.isThreadReply),
             },
           });
-          const event = MessageCreatedEventSchema.parse({ type: "MessageCreated", message: normalized });
-          this.nats.publish(subjectFor("slack", "messageCreated"), this.sc.encode(JSON.stringify(event)));
+          const event = MessageCreatedEventSchema.parse({
+            type: "MessageCreated",
+            message: normalized,
+          });
+          this.nats.publish(
+            subjectFor("slack", "messageCreated"),
+            this.sc.encode(JSON.stringify(event)),
+          );
 
           const embedDim = Number.isFinite(this.embedDim) ? this.embedDim : 4096;
           const embedding = m.text ? await this.aiEmbed(String(m.text)) : [];
@@ -547,7 +611,7 @@ export class SlackIngestor {
               ) VALUES ($1, $2, $3, to_timestamp($4), $5::vector)
               ON CONFLICT (id) DO NOTHING
               `,
-              [sourceId, m.channel, narrativeKey, tsNum, `[${embedding.join(",")}]`]
+              [sourceId, m.channel, narrativeKey, tsNum, `[${embedding.join(",")}]`],
             );
           } else if (embedding.length) {
             this.log("warn", "embedding dimension mismatch", {
@@ -560,14 +624,17 @@ export class SlackIngestor {
       }
 
       await client.query("COMMIT");
-      this.log("info", "slack collect finished", { insertedOrUpdated: count, publishedNew: published });
+      this.log("info", "slack collect finished", {
+        insertedOrUpdated: count,
+        publishedNew: published,
+      });
       return { insertedOrUpdated: count, publishedNew: published };
     } catch (e) {
       await client.query("ROLLBACK");
       this.log(
         "error",
         "slack collect failed (job will fail)",
-        e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e
+        e instanceof Error ? { name: e.name, message: e.message, stack: e.stack } : e,
       );
       throw e;
     } finally {
@@ -595,7 +662,7 @@ export class SlackIngestor {
       WHERE ts >= $1
       ORDER BY channel_id, COALESCE(thread_ts, slack_ts), ts DESC
       `,
-      [cutoff]
+      [cutoff],
     );
 
     let updated = 0;
@@ -615,7 +682,9 @@ export class SlackIngestor {
       const msgId = slackSourceIdToBusMessageId(sourceId);
       if (!row.thread_ts) {
         const channelName = this.settings.channelNameMap[row.channel_id] ?? row.channel_id;
-        const summaryShort = this.settings.nonThreadNarrativeTemplate.replace("{channel}", channelName).slice(0, 128);
+        const summaryShort = this.settings.nonThreadNarrativeTemplate
+          .replace("{channel}", channelName)
+          .slice(0, 128);
         await this.publishNarrativeUpdate({
           narrativeKey,
           messageId: msgId,
@@ -630,7 +699,7 @@ export class SlackIngestor {
 
       const prior = await this.db.query(
         `SELECT "summaryLong" FROM bus_narratives WHERE "ownerModule" = $1 AND "sourceKey" = $2 LIMIT 1`,
-        ["slack", narrativeKey]
+        ["slack", narrativeKey],
       );
       const priorSummary = String(prior.rows?.[0]?.summaryLong ?? "");
       const threadRootTs = row.thread_ts ?? row.slack_ts;
@@ -644,7 +713,7 @@ export class SlackIngestor {
           OR (thread_ts = $2)
         )
         `,
-        [row.channel_id, threadRootTs]
+        [row.channel_id, threadRootTs],
       );
       const threadMsgCount = Number(countRes.rows?.[0]?.c ?? 0);
 
@@ -661,9 +730,11 @@ export class SlackIngestor {
           ORDER BY ts ASC
           LIMIT $3
           `,
-          [row.channel_id, threadRootTs, topK]
+          [row.channel_id, threadRootTs, topK],
         );
-        messages = (chron.rows ?? []).map((r: { text: string | null }) => String(r.text ?? "")).filter(Boolean);
+        messages = (chron.rows ?? [])
+          .map((r: { text: string | null }) => String(r.text ?? ""))
+          .filter(Boolean);
       }
 
       if (messages.length === 0 && threadMsgCount > topK) {
@@ -679,9 +750,11 @@ export class SlackIngestor {
             ORDER BY e.embedding <-> $2::vector
             LIMIT $3
             `,
-            [narrativeKey, `[${queryEmbedding.join(",")}]`, topK]
+            [narrativeKey, `[${queryEmbedding.join(",")}]`, topK],
           );
-          messages = (embRows.rows ?? []).map((r: { text: string | null }) => String(r.text ?? "")).filter(Boolean);
+          messages = (embRows.rows ?? [])
+            .map((r: { text: string | null }) => String(r.text ?? ""))
+            .filter(Boolean);
         }
       }
 
@@ -696,11 +769,16 @@ export class SlackIngestor {
           ORDER BY ts DESC
           LIMIT $3
           `,
-          [row.channel_id, threadRootTs, topK]
+          [row.channel_id, threadRootTs, topK],
         );
-        messages = (fallback.rows ?? []).map((r: { text: string | null }) => String(r.text ?? "")).filter(Boolean);
+        messages = (fallback.rows ?? [])
+          .map((r: { text: string | null }) => String(r.text ?? ""))
+          .filter(Boolean);
         if (messages.length === 0) {
-          this.log("warn", "no thread messages found for narrative", { narrativeKey, channelId: row.channel_id });
+          this.log("warn", "no thread messages found for narrative", {
+            narrativeKey,
+            channelId: row.channel_id,
+          });
         }
       }
 
@@ -744,5 +822,3 @@ export class SlackIngestor {
     };
   }
 }
-
-

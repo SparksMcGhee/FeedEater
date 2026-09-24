@@ -23,5 +23,3 @@ export function createSettingsClient(opts: { apiBaseUrl: string }): SettingsClie
     },
   };
 }
-
-

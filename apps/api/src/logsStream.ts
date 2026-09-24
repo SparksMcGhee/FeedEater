@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
 import type { NatsConnection, StringCodec } from "nats";
 
-export function getLogsStream(params: { getNatsConn: () => Promise<NatsConnection>; sc: StringCodec }) {
+export function getLogsStream(params: {
+  getNatsConn: () => Promise<NatsConnection>;
+  sc: StringCodec;
+}) {
   return async (req: Request, res: Response) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -55,5 +58,3 @@ export function getLogsStream(params: { getNatsConn: () => Promise<NatsConnectio
     })();
   };
 }
-
-

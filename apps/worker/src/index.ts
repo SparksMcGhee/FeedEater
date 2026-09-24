@@ -1,19 +1,19 @@
-import { connect, StringCodec } from "nats";
-import { Pool } from "pg";
 import {
+  createSettingsClient,
   JobRunEventSchema,
+  jobSubjectFor,
   MessageCreatedEventSchema,
   NarrativeUpdatedEventSchema,
   NormalizedMessageSchema,
-  createSettingsClient,
-  jobSubjectFor,
   subjectFor,
 } from "@feedeater/core";
+import type { ModuleRuntime, ModuleRuntimeContext } from "@feedeater/module-sdk";
 import { slackSourceIdToBusMessageId } from "@feedeater/module-slack";
-import { discoverModules } from "./modules/discovery.js";
-import type { ModuleRuntimeContext, ModuleRuntime } from "@feedeater/module-sdk";
-import { loadModuleRuntime } from "./modules/runtime.js";
+import { connect, StringCodec } from "nats";
+import { Pool } from "pg";
 import { startBusArchiver } from "./bus/archiver.js";
+import { discoverModules } from "./modules/discovery.js";
+import { loadModuleRuntime } from "./modules/runtime.js";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 function safeJson(x: unknown): string {
@@ -24,7 +24,13 @@ function safeJson(x: unknown): string {
   }
 }
 
-function publishLog(nc: import("nats").NatsConnection, sc: import("nats").StringCodec, level: LogLevel, message: string, meta?: unknown) {
+function publishLog(
+  nc: import("nats").NatsConnection,
+  sc: import("nats").StringCodec,
+  level: LogLevel,
+  message: string,
+  meta?: unknown,
+) {
   try {
     nc.publish(
       "feedeater.worker.log",
@@ -36,8 +42,8 @@ function publishLog(nc: import("nats").NatsConnection, sc: import("nats").String
           at: new Date().toISOString(),
           message,
           meta,
-        })
-      )
+        }),
+      ),
     );
   } catch {
     // ignore
@@ -78,7 +84,7 @@ function serializeError(err: unknown): string {
 async function ensureNarrativeStorage(
   db: Pool,
   publish: (level: LogLevel, message: string, meta?: unknown) => void,
-  embedDim: number
+  embedDim: number,
 ) {
   try {
     await db.query(`CREATE EXTENSION IF NOT EXISTS vector`);
@@ -89,13 +95,15 @@ async function ensureNarrativeStorage(
   if (Number.isFinite(embedDim) && embedDim > 0) {
     try {
       await db.query(
-        `ALTER TABLE bus_narratives ADD COLUMN IF NOT EXISTS embedding vector(${embedDim})`
+        `ALTER TABLE bus_narratives ADD COLUMN IF NOT EXISTS embedding vector(${embedDim})`,
       );
       await db.query(
-        `ALTER TABLE bus_narratives ALTER COLUMN embedding TYPE vector(${embedDim}) USING embedding::vector`
+        `ALTER TABLE bus_narratives ALTER COLUMN embedding TYPE vector(${embedDim}) USING embedding::vector`,
       );
     } catch (err) {
-      publish("warn", "failed to ensure bus_narratives embedding dimension", { err: serializeError(err) });
+      publish("warn", "failed to ensure bus_narratives embedding dimension", {
+        err: serializeError(err),
+      });
     }
   }
 
@@ -105,10 +113,12 @@ async function ensureNarrativeStorage(
         `
         CREATE INDEX IF NOT EXISTS bus_narrative_embedding_idx
         ON bus_narratives USING ivfflat (embedding vector_cosine_ops)
-        `
+        `,
       );
     } catch (err) {
-      publish("warn", "failed to ensure bus_narratives embedding index", { err: serializeError(err) });
+      publish("warn", "failed to ensure bus_narratives embedding index", {
+        err: serializeError(err),
+      });
     }
   } else {
     try {
@@ -164,7 +174,7 @@ async function upsertNarrative(params: {
       params.summaryLong,
       params.keyPoints,
       embeddingValue,
-    ]
+    ],
   );
 
   const narrativeId = res.rows?.[0]?.id as string | undefined;
@@ -183,7 +193,7 @@ async function upsertNarrative(params: {
           OR (thread_ts = $2)
         )
         `,
-        [channelId, threadRootTs]
+        [channelId, threadRootTs],
       );
       for (const r of slackRows.rows ?? []) {
         const busId = slackSourceIdToBusMessageId(String((r as { id: string }).id));
@@ -193,7 +203,7 @@ async function upsertNarrative(params: {
           VALUES ($1, $2, now())
           ON CONFLICT ("narrativeId", "messageId") DO NOTHING
           `,
-          [narrativeId, busId]
+          [narrativeId, busId],
         );
       }
     }
@@ -206,7 +216,7 @@ async function upsertNarrative(params: {
       VALUES ($1, $2, now())
       ON CONFLICT ("narrativeId", "messageId") DO NOTHING
       `,
-      [narrativeId, params.messageId]
+      [narrativeId, params.messageId],
     );
   }
 }
@@ -245,7 +255,7 @@ async function recordJobStart(params: {
       params.queue,
       params.trigger.type,
       triggerJson,
-    ]
+    ],
   );
 
   await params.db.query(
@@ -254,7 +264,7 @@ async function recordJobStart(params: {
     VALUES ($1, $2, $3, now())
     ON CONFLICT (module, job) DO UPDATE SET "lastRunAt" = EXCLUDED."lastRunAt"
     `,
-    [crypto.randomUUID(), params.moduleName, params.jobName]
+    [crypto.randomUUID(), params.moduleName, params.jobName],
   );
 }
 
@@ -271,7 +281,7 @@ async function recordJobSuccess(params: {
     SET status = 'success', "updatedAt" = now(), "finishedAt" = now(), error = NULL, "metricsJson" = $2
     WHERE id = $1
     `,
-    [params.runId, params.metricsJson ?? null]
+    [params.runId, params.metricsJson ?? null],
   );
   await params.db.query(
     `
@@ -279,18 +289,24 @@ async function recordJobSuccess(params: {
     SET "lastSuccessAt" = now(), "lastErrorAt" = NULL, "lastError" = NULL, "lastRunAt" = now(), "lastMetrics" = $3
     WHERE module = $1 AND job = $2
     `,
-    [params.moduleName, params.jobName, params.metricsJson ?? null]
+    [params.moduleName, params.jobName, params.metricsJson ?? null],
   );
 }
 
-async function recordJobError(params: { db: Pool; runId: string; moduleName: string; jobName: string; error: string }) {
+async function recordJobError(params: {
+  db: Pool;
+  runId: string;
+  moduleName: string;
+  jobName: string;
+  error: string;
+}) {
   await params.db.query(
     `
     UPDATE job_runs
     SET status = 'error', "updatedAt" = now(), "finishedAt" = now(), error = $2
     WHERE id = $1
     `,
-    [params.runId, params.error]
+    [params.runId, params.error],
   );
   await params.db.query(
     `
@@ -298,7 +314,7 @@ async function recordJobError(params: { db: Pool; runId: string; moduleName: str
     SET "lastErrorAt" = now(), "lastError" = $3, "lastRunAt" = now()
     WHERE module = $1 AND job = $2
     `,
-    [params.moduleName, params.jobName, params.error]
+    [params.moduleName, params.jobName, params.error],
   );
 }
 
@@ -400,7 +416,11 @@ async function publishJobEvent(params: {
     trigger: params.trigger,
     data: params.data,
   });
-  const subject = jobSubjectFor({ moduleName: params.moduleName, queue: params.queue, job: params.jobName });
+  const subject = jobSubjectFor({
+    moduleName: params.moduleName,
+    queue: params.queue,
+    job: params.jobName,
+  });
   params.nc.publish(subject, params.sc.encode(JSON.stringify(payload)));
 }
 
@@ -421,13 +441,19 @@ async function main() {
         try {
           const res = await fetch(url, { headers: { authorization: `Bearer ${INTERNAL_TOKEN}` } });
           if (!res.ok) throw new Error(`internal settings fetch failed (${res.status})`);
-          const data = (await res.json()) as { settings: Array<{ key: string; value: string | null }> };
+          const data = (await res.json()) as {
+            settings: Array<{ key: string; value: string | null }>;
+          };
           const out: Record<string, unknown> = {};
           for (const s of data.settings) out[s.key] = s.value;
-          if (attempt > 1) publishLog(nc, sc, "info", "internal settings fetch recovered", { moduleName, attempt });
+          if (attempt > 1)
+            publishLog(nc, sc, "info", "internal settings fetch recovered", {
+              moduleName,
+              attempt,
+            });
           return out;
         } catch (err) {
-          const delay = Math.min(5000, 250 * Math.pow(1.6, attempt - 1));
+          const delay = Math.min(5000, 250 * 1.6 ** (attempt - 1));
           publishLog(nc, sc, "warn", "internal settings fetch failed; retrying", {
             moduleName,
             attempt,
@@ -440,17 +466,26 @@ async function main() {
     };
 
     const sysSettings = await fetchSettings("system");
-    const sysEmbedDimRaw = sysSettings.ai_embed_dim ?? sysSettings.ollama_embed_dim ?? DEFAULT_EMBED_DIM;
-    const sysEmbedDim = Number.isFinite(Number(sysEmbedDimRaw)) ? Number(sysEmbedDimRaw) : DEFAULT_EMBED_DIM;
+    const sysEmbedDimRaw =
+      sysSettings.ai_embed_dim ?? sysSettings.ollama_embed_dim ?? DEFAULT_EMBED_DIM;
+    const sysEmbedDim = Number.isFinite(Number(sysEmbedDimRaw))
+      ? Number(sysEmbedDimRaw)
+      : DEFAULT_EMBED_DIM;
     currentEmbedDim = sysEmbedDim;
-    await ensureNarrativeStorage(db, (level, message, meta) => publishLog(nc, sc, level, message, meta), sysEmbedDim);
+    await ensureNarrativeStorage(
+      db,
+      (level, message, meta) => publishLog(nc, sc, level, message, meta),
+      sysEmbedDim,
+    );
 
     // Start append-only archive consumer (JetStream -> Postgres).
     await startBusArchiver({ nc, db, fetchInternalSettings: fetchSettings });
 
     const modules = await discoverModules(MODULES_DIR);
     // eslint-disable-next-line no-console
-    console.log(`[worker] discovered modules: ${modules.map((m) => m.name).join(", ") || "(none)"}`);
+    console.log(
+      `[worker] discovered modules: ${modules.map((m) => m.name).join(", ") || "(none)"}`,
+    );
 
     const runtimeByModule = new Map<string, ModuleRuntime>();
     for (const m of modules) {
@@ -460,7 +495,11 @@ async function main() {
         console.log(`[worker] module ${m.name} has no runtime.entry; skipping runtime load`);
         continue;
       }
-      const rt = await loadModuleRuntime({ modulesDir: MODULES_DIR, moduleName: m.name, runtimeEntry: entry });
+      const rt = await loadModuleRuntime({
+        modulesDir: MODULES_DIR,
+        moduleName: m.name,
+        runtimeEntry: entry,
+      });
       runtimeByModule.set(m.name, rt);
     }
 
@@ -526,11 +565,17 @@ async function main() {
     }
 
     // NATS → job triggers
-    const natsSubs: Array<{ subject: string; queue: string; jobName: string; moduleName: string }> = [];
+    const natsSubs: Array<{ subject: string; queue: string; jobName: string; moduleName: string }> =
+      [];
     for (const mod of modules) {
       for (const j of mod.jobs ?? []) {
         if (j.triggeredBy)
-          natsSubs.push({ subject: j.triggeredBy, queue: j.queue, jobName: j.name, moduleName: mod.name });
+          natsSubs.push({
+            subject: j.triggeredBy,
+            queue: j.queue,
+            jobName: j.name,
+            moduleName: mod.name,
+          });
       }
     }
 
@@ -595,7 +640,10 @@ async function main() {
           if (!rt) throw new Error(`No runtime loaded for module ${env.module}`);
 
           const handler = rt.handlers?.[env.queue]?.[env.job];
-          if (!handler) throw new Error(`No handler for module=${env.module} queue=${env.queue} job=${env.job}`);
+          if (!handler)
+            throw new Error(
+              `No handler for module=${env.module} queue=${env.queue} job=${env.job}`,
+            );
 
           const ctx = makeCtx(env.module);
           const startedAt = Date.now();
@@ -606,7 +654,13 @@ async function main() {
               ? (result.metrics as Record<string, unknown>)
               : {};
           const metricsJson = { durationMs, ...metrics };
-          await recordJobSuccess({ db, runId, moduleName: env.module, jobName: env.job, metricsJson });
+          await recordJobSuccess({
+            db,
+            runId,
+            moduleName: env.module,
+            jobName: env.job,
+            metricsJson,
+          });
         } catch (err) {
           const message = serializeError(err);
           publishLog(nc, sc, "error", "job failed", { err: message });
@@ -615,7 +669,13 @@ async function main() {
             const env = JobRunEventSchema.safeParse(raw);
             if (env.success) {
               const runId = env.data.runId ?? crypto.randomUUID();
-              await recordJobError({ db, runId, moduleName: env.data.module, jobName: env.data.job, error: message });
+              await recordJobError({
+                db,
+                runId,
+                moduleName: env.data.module,
+                jobName: env.data.job,
+                error: message,
+              });
             }
           } catch {
             // ignore
@@ -637,15 +697,21 @@ async function main() {
           await upsertNarrative({
             db,
             ownerModule: env.narrative.ownerModule,
-            ...(env.narrative.sourceKey !== undefined ? { sourceKey: env.narrative.sourceKey } : {}),
+            ...(env.narrative.sourceKey !== undefined
+              ? { sourceKey: env.narrative.sourceKey }
+              : {}),
             summaryShort: env.narrative.summaryShort,
             summaryLong: env.narrative.summaryLong,
             keyPoints: env.narrative.keyPoints ?? [],
-            ...(env.narrative.embedding !== undefined ? { embedding: env.narrative.embedding } : {}),
+            ...(env.narrative.embedding !== undefined
+              ? { embedding: env.narrative.embedding }
+              : {}),
             ...(env.messageId !== undefined ? { messageId: env.messageId } : {}),
           });
         } catch (err) {
-          publishLog(nc, sc, "warn", "failed to apply narrative update", { err: serializeError(err) });
+          publishLog(nc, sc, "warn", "failed to apply narrative update", {
+            err: serializeError(err),
+          });
         }
       }
     })().catch((err) => {
@@ -658,15 +724,20 @@ async function main() {
     const sysSettings2 = await fetchSettings("system");
     const lookbackMinutesRaw = sysSettings2.dashboard_bus_history_minutes;
     const parsedLookbackMinutes =
-      lookbackMinutesRaw === null || lookbackMinutesRaw === undefined ? NaN : Number(String(lookbackMinutesRaw).trim());
-    const lookbackMinutes = Number.isFinite(parsedLookbackMinutes) && parsedLookbackMinutes >= 0 ? parsedLookbackMinutes : 60;
+      lookbackMinutesRaw === null || lookbackMinutesRaw === undefined
+        ? NaN
+        : Number(String(lookbackMinutesRaw).trim());
+    const lookbackMinutes =
+      Number.isFinite(parsedLookbackMinutes) && parsedLookbackMinutes >= 0
+        ? parsedLookbackMinutes
+        : 60;
 
     await db.query(
       `
       DELETE FROM bus_reemit_dedupe
       WHERE "lastEmittedAt" < (now() - ($1 * INTERVAL '1 minute'))
       `,
-      [lookbackMinutes]
+      [lookbackMinutes],
     );
 
     const since = new Date(Date.now() - lookbackMinutes * 60_000);
@@ -678,7 +749,7 @@ async function main() {
       WHERE m."createdAt" >= $1 AND d."messageId" IS NULL
       ORDER BY m."createdAt" ASC
       `,
-      [since]
+      [since],
     );
 
     for (const row of res.rows as Array<{ id: string; rawJson: unknown }>) {
@@ -688,17 +759,23 @@ async function main() {
           type: "MessageCreated",
           message: { ...msg, realtime: false },
         });
-        nc.publish(subjectFor(msg.source.module, "messageCreated"), sc.encode(JSON.stringify(event)));
+        nc.publish(
+          subjectFor(msg.source.module, "messageCreated"),
+          sc.encode(JSON.stringify(event)),
+        );
         await db.query(
           `
           INSERT INTO bus_reemit_dedupe ("messageId", "lastEmittedAt")
           VALUES ($1, now())
           ON CONFLICT ("messageId") DO UPDATE SET "lastEmittedAt" = EXCLUDED."lastEmittedAt"
           `,
-          [row.id]
+          [row.id],
         );
       } catch (err) {
-        publishLog(nc, sc, "warn", "failed to re-emit bus history", { err: serializeError(err), messageId: row.id });
+        publishLog(nc, sc, "warn", "failed to re-emit bus history", {
+          err: serializeError(err),
+          messageId: row.id,
+        });
       }
     }
 
@@ -715,5 +792,3 @@ main().catch((err) => {
   console.error("[worker] fatal", err);
   process.exit(1);
 });
-
-

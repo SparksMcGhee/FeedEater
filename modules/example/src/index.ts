@@ -1,7 +1,6 @@
+import { MessageCreatedEventSchema, NormalizedMessageSchema, subjectFor } from "@feedeater/core";
 import type { NatsConnection, StringCodec } from "nats";
 import { v4 as uuidv4 } from "uuid";
-
-import { MessageCreatedEventSchema, NormalizedMessageSchema, subjectFor } from "@feedeater/core";
 
 export async function runExampleTick(params: { nats: NatsConnection; sc: StringCodec }) {
   const msg = NormalizedMessageSchema.parse({
@@ -17,9 +16,10 @@ export async function runExampleTick(params: { nats: NatsConnection; sc: StringC
   });
 
   const event = MessageCreatedEventSchema.parse({ type: "MessageCreated", message: msg });
-  params.nats.publish(subjectFor("example", "messageCreated"), params.sc.encode(JSON.stringify(event)));
+  params.nats.publish(
+    subjectFor("example", "messageCreated"),
+    params.sc.encode(JSON.stringify(event)),
+  );
 }
 
 export { createModuleRuntime } from "./runtime.js";
-
-

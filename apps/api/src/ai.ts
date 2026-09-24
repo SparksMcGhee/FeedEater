@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
 import { prisma } from "@feedeater/db";
+import type { Request, Response } from "express";
 
 function requireInternalAuth(req: Request): void {
   const expected = process.env.FEED_INTERNAL_TOKEN;
@@ -27,28 +27,67 @@ function str(val: string | null | undefined): string {
 
 function getAiConfig(settings: Record<string, string | null>) {
   // Primary summary endpoint (local vLLM)
-  const baseUrl = (str(settings.ai_base_url) || str(settings.ollama_base_url) || str(process.env.AI_BASE_URL) || str(process.env.OLLAMA_BASE_URL)).replace(/\/+$/, "");
-  const summaryModel = str(settings.ai_summary_model) || str(settings.ollama_summary_model) || str(process.env.AI_SUMMARY_MODEL) || str(process.env.OLLAMA_SUMMARY_MODEL) || "Qwen/Qwen3-Coder-Next-FP8";
+  const baseUrl = (
+    str(settings.ai_base_url) ||
+    str(settings.ollama_base_url) ||
+    str(process.env.AI_BASE_URL) ||
+    str(process.env.OLLAMA_BASE_URL)
+  ).replace(/\/+$/, "");
+  const summaryModel =
+    str(settings.ai_summary_model) ||
+    str(settings.ollama_summary_model) ||
+    str(process.env.AI_SUMMARY_MODEL) ||
+    str(process.env.OLLAMA_SUMMARY_MODEL) ||
+    "Qwen/Qwen3-Coder-Next-FP8";
   const apiKey = str(settings.ai_api_key) || str(process.env.AI_API_KEY);
 
   // Dedicated embed endpoint (second vLLM container)
-  const embedBaseUrl = (str(settings.ai_embed_base_url) || str(process.env.AI_EMBED_BASE_URL)).replace(/\/+$/, "");
-  const embedModel = str(settings.ai_embed_model) || str(settings.ollama_embed_model) || str(process.env.AI_EMBED_MODEL) || str(process.env.OLLAMA_EMBED_MODEL) || "BAAI/bge-base-en-v1.5";
-  const embedDimRaw = str(settings.ai_embed_dim) || str(settings.ollama_embed_dim) || str(process.env.AI_EMBED_DIM) || str(process.env.OLLAMA_EMBED_DIM) || "768";
+  const embedBaseUrl = (
+    str(settings.ai_embed_base_url) || str(process.env.AI_EMBED_BASE_URL)
+  ).replace(/\/+$/, "");
+  const embedModel =
+    str(settings.ai_embed_model) ||
+    str(settings.ollama_embed_model) ||
+    str(process.env.AI_EMBED_MODEL) ||
+    str(process.env.OLLAMA_EMBED_MODEL) ||
+    "BAAI/bge-base-en-v1.5";
+  const embedDimRaw =
+    str(settings.ai_embed_dim) ||
+    str(settings.ollama_embed_dim) ||
+    str(process.env.AI_EMBED_DIM) ||
+    str(process.env.OLLAMA_EMBED_DIM) ||
+    "768";
   const embedDim = Number.isFinite(Number(embedDimRaw)) ? Number(embedDimRaw) : 768;
 
   // Cloud burst (routes summary requests to an external provider when enabled)
-  const burstEnabled = (str(settings.ai_burst_enabled) || str(process.env.AI_BURST_ENABLED)).toLowerCase() === "true";
-  const burstBaseUrl = (str(settings.ai_burst_base_url) || str(process.env.AI_BURST_BASE_URL) || "https://api.together.xyz/v1").replace(/\/+$/, "");
+  const burstEnabled =
+    (str(settings.ai_burst_enabled) || str(process.env.AI_BURST_ENABLED)).toLowerCase() === "true";
+  const burstBaseUrl = (
+    str(settings.ai_burst_base_url) ||
+    str(process.env.AI_BURST_BASE_URL) ||
+    "https://api.together.xyz/v1"
+  ).replace(/\/+$/, "");
   const burstApiKey = str(settings.ai_burst_api_key) || str(process.env.AI_BURST_API_KEY);
-  const burstSummaryModel = str(settings.ai_burst_summary_model) || str(process.env.AI_BURST_SUMMARY_MODEL) || summaryModel;
+  const burstSummaryModel =
+    str(settings.ai_burst_summary_model) || str(process.env.AI_BURST_SUMMARY_MODEL) || summaryModel;
 
-  return { baseUrl, summaryModel, apiKey, embedBaseUrl, embedModel, embedDim, burstEnabled, burstBaseUrl, burstApiKey, burstSummaryModel };
+  return {
+    baseUrl,
+    summaryModel,
+    apiKey,
+    embedBaseUrl,
+    embedModel,
+    embedDim,
+    burstEnabled,
+    burstBaseUrl,
+    burstApiKey,
+    burstSummaryModel,
+  };
 }
 
 function authHeaders(apiKey: string): Record<string, string> {
   const headers: Record<string, string> = { "content-type": "application/json" };
-  if (apiKey) headers["authorization"] = `Bearer ${apiKey}`;
+  if (apiKey) headers.authorization = `Bearer ${apiKey}`;
   return headers;
 }
 
@@ -68,14 +107,18 @@ export function postAiSummary() {
       // Resolve which endpoint to use — burst takes priority when enabled
       const useBase = cfg.burstEnabled && cfg.burstBaseUrl ? cfg.burstBaseUrl : cfg.baseUrl;
       const useKey = cfg.burstEnabled && cfg.burstBaseUrl ? cfg.burstApiKey : cfg.apiKey;
-      const useModel = cfg.burstEnabled && cfg.burstBaseUrl ? cfg.burstSummaryModel : cfg.summaryModel;
+      const useModel =
+        cfg.burstEnabled && cfg.burstBaseUrl ? cfg.burstSummaryModel : cfg.summaryModel;
 
       if (!useBase) {
         res.status(400).json({ error: "ai_base_url is not configured" });
         return;
       }
 
-      const system = typeof body.system === "string" && body.system.trim().length > 0 ? body.system.trim() : undefined;
+      const system =
+        typeof body.system === "string" && body.system.trim().length > 0
+          ? body.system.trim()
+          : undefined;
       const wantJson = typeof body.format === "string" && body.format.trim() === "json";
 
       const messages: Array<{ role: string; content: string }> = [];
@@ -103,7 +146,10 @@ export function postAiSummary() {
 
       const elapsedSec = (Date.now() - startMs) / 1000;
       const completionTokens = data.usage?.completion_tokens;
-      const tokenRate = typeof completionTokens === "number" && elapsedSec > 0 ? completionTokens / elapsedSec : null;
+      const tokenRate =
+        typeof completionTokens === "number" && elapsedSec > 0
+          ? completionTokens / elapsedSec
+          : null;
 
       res.json({ response: content, token_rate: tokenRate });
     } catch (e) {

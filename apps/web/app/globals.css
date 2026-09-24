@@ -19,11 +19,19 @@ body {
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 800px at 20% 10%, rgba(124, 58, 237, 0.25), transparent 60%),
-    radial-gradient(900px 600px at 70% 30%, rgba(56, 189, 248, 0.18), transparent 55%),
-    var(--bg);
+  background:
+    radial-gradient(1200px 800px at 20% 10%, rgba(124, 58, 237, 0.25), transparent 60%),
+    radial-gradient(900px 600px at 70% 30%, rgba(56, 189, 248, 0.18), transparent 55%), var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    "Apple Color Emoji",
     "Segoe UI Emoji";
 }
 
@@ -49,5 +57,3 @@ a {
 .muted {
   color: var(--muted);
 }
-
-

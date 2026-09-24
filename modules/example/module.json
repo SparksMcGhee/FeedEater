@@ -22,9 +22,5 @@
     { "key": "enabled", "type": "boolean", "default": true },
     { "key": "demoSecret", "type": "secret", "required": false }
   ],
-  "cards": [
-    { "id": "exampleStatus", "title": "Example Module" }
-  ]
+  "cards": [{ "id": "exampleStatus", "title": "Example Module" }]
 }
-
-

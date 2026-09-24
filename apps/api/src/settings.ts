@@ -1,11 +1,14 @@
-import type { Request, Response } from "express";
 import { prisma } from "@feedeater/db";
+import type { Request, Response } from "express";
 
 import { decryptSecret, encryptSecret } from "./crypto.js";
 
 export async function getModuleSettings(req: Request, res: Response) {
   const moduleName = String(req.params.module);
-  const rows = await prisma.setting.findMany({ where: { module: moduleName }, orderBy: { key: "asc" } });
+  const rows = await prisma.setting.findMany({
+    where: { module: moduleName },
+    orderBy: { key: "asc" },
+  });
 
   res.json({
     module: moduleName,
@@ -34,7 +37,10 @@ export async function getModuleSettingsInternal(req: Request, res: Response) {
   requireInternalAuth(req);
 
   const moduleName = String(req.params.module);
-  const rows = await prisma.setting.findMany({ where: { module: moduleName }, orderBy: { key: "asc" } });
+  const rows = await prisma.setting.findMany({
+    where: { module: moduleName },
+    orderBy: { key: "asc" },
+  });
 
   res.json({
     module: moduleName,
@@ -72,5 +78,3 @@ export async function putModuleSetting(req: Request, res: Response) {
     value: row.isSecret ? null : row.value,
   });
 }
-
-

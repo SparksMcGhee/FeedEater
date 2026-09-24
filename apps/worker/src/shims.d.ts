@@ -4,7 +4,7 @@
 declare var process: any;
 
 declare namespace NodeJS {
-  interface Timeout {}
+  type Timeout = {};
 }
 
 declare module "nats" {
@@ -29,5 +29,3 @@ declare module "pg" {
     query(sql: string, params?: any[]): Promise<any>;
   }
 }
-
-

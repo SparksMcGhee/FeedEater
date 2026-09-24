@@ -1,6 +1,6 @@
 import type { ModuleRuntime } from "@feedeater/module-sdk";
 
-import { SlackIngestor, parseSlackSettingsFromInternal } from "./ingest.js";
+import { parseSlackSettingsFromInternal, SlackIngestor } from "./ingest.js";
 
 function parseSystemNarrativeSettings(raw: Record<string, unknown>) {
   const rawTop = raw.narrative_top_k ?? raw.context_top_k;
@@ -58,7 +58,9 @@ export function createModuleRuntime(): ModuleRuntime {
             embedDim: sys.embedDim,
           });
           await ingestor.ensureSchema();
-          const result = await ingestor.refreshNarratives({ lookbackHours: settings.lookbackHours });
+          const result = await ingestor.refreshNarratives({
+            lookbackHours: settings.lookbackHours,
+          });
           return {
             metrics: {
               narratives_updated: result.updated,

@@ -27,5 +27,3 @@ declare module "nats" {
   export type NatsConnection = any;
   export type StringCodec = any;
 }
-
-

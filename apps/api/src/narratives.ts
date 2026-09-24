@@ -1,7 +1,7 @@
-import type { Request, Response } from "express";
-import type { NatsConnection, StringCodec } from "nats";
 import { NarrativeUpdatedEventSchema } from "@feedeater/core";
 import { prisma } from "@feedeater/db";
+import type { Request, Response } from "express";
+import type { NatsConnection, StringCodec } from "nats";
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -142,7 +142,10 @@ export function getNarrativeMessages(req: Request, res: Response) {
   })();
 }
 
-export function getNarrativesStream(params: { getNatsConn: () => Promise<NatsConnection>; sc: StringCodec }) {
+export function getNarrativesStream(params: {
+  getNatsConn: () => Promise<NatsConnection>;
+  sc: StringCodec;
+}) {
   return async (req: Request, res: Response) => {
     res.status(200);
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -186,7 +189,9 @@ export function getNarrativesStream(params: { getNatsConn: () => Promise<NatsCon
           if (!nv.ownerModule || !nv.sourceKey) continue;
 
           const record = await prisma.busNarrative.findUnique({
-            where: { ownerModule_sourceKey: { ownerModule: nv.ownerModule, sourceKey: nv.sourceKey } },
+            where: {
+              ownerModule_sourceKey: { ownerModule: nv.ownerModule, sourceKey: nv.sourceKey },
+            },
             include: { _count: { select: { messages: true } } },
           });
           if (!record) continue;

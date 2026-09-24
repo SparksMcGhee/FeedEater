@@ -25,7 +25,11 @@
     { "key": "lookbackHours", "type": "number", "default": 24 },
     { "key": "includeThreads", "type": "boolean", "default": true },
     { "key": "excludeBots", "type": "boolean", "default": true },
-    { "key": "nonThreadNarrativeTemplate", "type": "string", "default": "Message in channel {channel}" },
+    {
+      "key": "nonThreadNarrativeTemplate",
+      "type": "string",
+      "default": "Message in channel {channel}"
+    },
     { "key": "channelNameMap", "type": "string", "default": "{}" },
     {
       "key": "narrativePrompt",
@@ -43,4 +47,3 @@
     { "id": "slackChannels", "title": "Slack Channels (Channel IDs)" }
   ]
 }
-

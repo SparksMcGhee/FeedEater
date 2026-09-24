@@ -22,5 +22,3 @@ export function createTagAppended(params: {
     value: params.value,
   });
 }
-
-

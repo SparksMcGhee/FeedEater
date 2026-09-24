@@ -14,4 +14,3 @@ declare module "nats" {
   export function connect(opts: any): Promise<any>;
   export function StringCodec(): any;
 }
-

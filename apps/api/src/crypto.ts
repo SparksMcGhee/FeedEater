@@ -37,5 +37,3 @@ export function decryptSecret(encoded: string): string {
 
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
 }
-
-

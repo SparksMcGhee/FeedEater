@@ -14,5 +14,3 @@ export type ModuleManifest = {
     description?: string;
   }>;
 };
-
-

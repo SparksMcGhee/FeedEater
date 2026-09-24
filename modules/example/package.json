@@ -13,8 +13,7 @@
   },
   "scripts": {
     "build": "tsup src/index.ts src/runtime.ts --format esm --dts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"(no lint configured yet)\""
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@feedeater/core": "0.0.1",
@@ -28,5 +27,3 @@
     "typescript": "^5.9.2"
   }
 }
-
-

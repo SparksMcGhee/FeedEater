@@ -88,7 +88,9 @@ export function LiveLogsFeed() {
                   </div>
                 </div>
 
-                {d.message ? <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{d.message}</div> : null}
+                {d.message ? (
+                  <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{d.message}</div>
+                ) : null}
 
                 {d.meta !== undefined ? (
                   <details style={{ marginTop: 8 }}>
@@ -119,5 +121,3 @@ export function LiveLogsFeed() {
     </div>
   );
 }
-
-

@@ -13,13 +13,10 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"(no lint configured yet)\""
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   }
 }
-
-

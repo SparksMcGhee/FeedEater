@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-
-import { ModuleTabs } from "./ModuleTabs";
-import { ModuleSettingsEditor } from "./ModuleSettingsEditor";
 import { SlackChannelsCard } from "./cards/SlackChannelsCard";
+import { ModuleSettingsEditor } from "./ModuleSettingsEditor";
+import { ModuleTabs } from "./ModuleTabs";
 
 type ModuleManifest = {
   name: string;
@@ -53,7 +52,9 @@ export function ModulePage(props: { moduleName: string }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/settings/${encodeURIComponent(props.moduleName)}`, { cache: "no-store" });
+        const res = await fetch(`/api/settings/${encodeURIComponent(props.moduleName)}`, {
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error(`Failed to load settings (${res.status})`);
         const data = (await res.json()) as ModuleSettingsResponse;
         if (cancelled) return;
@@ -70,14 +71,14 @@ export function ModulePage(props: { moduleName: string }) {
 
   const module = useMemo(
     () => modules?.find((m: ModuleManifest) => m.name === props.moduleName) ?? null,
-    [modules, props.moduleName]
+    [modules, props.moduleName],
   );
   const sortedModules = useMemo(
     () =>
       (modules ?? [])
         .slice()
         .sort((a: ModuleManifest, b: ModuleManifest) => a.name.localeCompare(b.name)),
-    [modules]
+    [modules],
   );
 
   if (error) {
@@ -103,7 +104,14 @@ export function ModulePage(props: { moduleName: string }) {
   return (
     <div style={{ display: "grid", gap: 16 }}>
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "baseline",
+          }}
+        >
           <div style={{ fontSize: 20, fontWeight: 700 }}>{module.name}</div>
           <div className="muted" style={{ fontSize: 12 }}>
             v{module.version}
@@ -113,7 +121,10 @@ export function ModulePage(props: { moduleName: string }) {
           {module.namespace}
         </div>
         <div style={{ height: 12 }} />
-        <ModuleTabs modules={sortedModules.map((m: ModuleManifest) => ({ name: m.name }))} current={module.name} />
+        <ModuleTabs
+          modules={sortedModules.map((m: ModuleManifest) => ({ name: m.name }))}
+          current={module.name}
+        />
         <div style={{ height: 10 }} />
         <Link href="/modules" className="muted" style={{ fontSize: 12 }}>
           ← Back to modules list
@@ -156,9 +167,11 @@ export function ModulePage(props: { moduleName: string }) {
         )}
       </div>
 
-      <ModuleSettingsEditor moduleName={module.name} settings={module.settings ?? []} initialValues={settings.settings} />
+      <ModuleSettingsEditor
+        moduleName={module.name}
+        settings={module.settings ?? []}
+        initialValues={settings.settings}
+      />
     </div>
   );
 }
-
-

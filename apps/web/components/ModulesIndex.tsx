@@ -40,8 +40,11 @@ export function ModulesIndex() {
   }, []);
 
   const sorted = useMemo(
-    () => (modules ?? []).slice().sort((a: ModuleManifest, b: ModuleManifest) => a.name.localeCompare(b.name)),
-    [modules]
+    () =>
+      (modules ?? [])
+        .slice()
+        .sort((a: ModuleManifest, b: ModuleManifest) => a.name.localeCompare(b.name)),
+    [modules],
   );
   const sortedTyped = sorted as ModuleManifest[];
 
@@ -71,8 +74,8 @@ export function ModulesIndex() {
         <div style={{ fontSize: 20, fontWeight: 700 }}>Modules</div>
         <div style={{ height: 8 }} />
         <div className="muted">
-          Pick a module to view its cards and edit settings. Adding a module should be as simple as dropping a folder into{" "}
-          <code>modules/</code>.
+          Pick a module to view its cards and edit settings. Adding a module should be as simple as
+          dropping a folder into <code>modules/</code>.
         </div>
       </div>
 
@@ -89,7 +92,14 @@ export function ModulesIndex() {
               className="card"
               style={{ display: "block" }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "baseline",
+                }}
+              >
                 <div style={{ fontSize: 16, fontWeight: 700 }}>{m.name}</div>
                 <div className="muted" style={{ fontSize: 12 }}>
                   v{m.version}
@@ -108,5 +118,3 @@ export function ModulesIndex() {
     </div>
   );
 }
-
-

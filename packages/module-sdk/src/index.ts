@@ -30,6 +30,7 @@ export type ModuleRuntimeContext = {
 export type ModuleJobHandler = (params: {
   ctx: ModuleRuntimeContext;
   job: { name: string; data: any; id?: string | number };
+  // biome-ignore lint/suspicious/noConfusingVoidType: handlers resolve with nothing (void) or a metrics object — by contract
 }) => Promise<void | { metrics?: Record<string, unknown> }>;
 
 export type ModuleRuntime = {
@@ -39,5 +40,3 @@ export type ModuleRuntime = {
    */
   handlers: Record<string, Record<string, ModuleJobHandler>>;
 };
-
-

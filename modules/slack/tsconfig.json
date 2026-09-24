@@ -5,5 +5,3 @@
   },
   "include": ["src/**/*.ts", "settings.ts"]
 }
-
-

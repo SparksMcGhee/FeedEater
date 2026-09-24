@@ -1,5 +1,5 @@
-import type { Request, Response } from "express";
 import { prisma } from "@feedeater/db";
+import type { Request, Response } from "express";
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
@@ -60,5 +60,3 @@ export async function getBusHistory(req: Request, res: Response) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
   }
 }
-
-

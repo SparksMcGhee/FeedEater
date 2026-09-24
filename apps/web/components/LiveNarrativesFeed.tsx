@@ -14,22 +14,34 @@ function renderMessageText(text: string) {
       const label = match[1];
       const href = match[2];
       parts.push(
-        <a key={`${match.index}-${href}`} href={href} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+        <a
+          key={`${match.index}-${href}`}
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "var(--accent)" }}
+        >
           {label}
-        </a>
+        </a>,
       );
     } else if (match[3]) {
       const href = match[3];
       parts.push(
-        <a key={`${match.index}-${href}`} href={href} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+        <a
+          key={`${match.index}-${href}`}
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "var(--accent)" }}
+        >
           {href}
-        </a>
+        </a>,
       );
     }
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts.length ? <>{parts}</> : text;
+  return parts.length ? parts : text;
 }
 
 type NarrativeItem = {
@@ -57,10 +69,17 @@ type NarrativeHistoryResponse =
   | { ok: false; error: string };
 
 type NarrativeMessagesResponse =
-  | { ok: true; narrative: NarrativeItem; messages: Array<{ id: string; createdAt: string; raw: unknown }> }
+  | {
+      ok: true;
+      narrative: NarrativeItem;
+      messages: Array<{ id: string; createdAt: string; raw: unknown }>;
+    }
   | { ok: false; error: string };
 
-type SettingsResponse = { module: string; settings: Array<{ key: string; isSecret: boolean; value: string | null }> };
+type SettingsResponse = {
+  module: string;
+  settings: Array<{ key: string; isSecret: boolean; value: string | null }>;
+};
 type ModulesResponse = { modules: Array<{ name: string }> };
 
 export function LiveNarrativesFeed() {
@@ -77,7 +96,9 @@ export function LiveNarrativesFeed() {
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [messagesById, setMessagesById] = useState<Record<string, Array<{ id: string; createdAt: string; raw: any }>>>({});
+  const [messagesById, setMessagesById] = useState<
+    Record<string, Array<{ id: string; createdAt: string; raw: any }>>
+  >({});
   const [messagesLoading, setMessagesLoading] = useState<Record<string, boolean>>({});
   const [messagesError, setMessagesError] = useState<Record<string, string>>({});
 
@@ -154,7 +175,7 @@ export function LiveNarrativesFeed() {
   useEffect(() => {
     void loadSettingsAndModules();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadSettingsAndModules]);
 
   useEffect(() => {
     void loadHistory();
@@ -163,12 +184,12 @@ export function LiveNarrativesFeed() {
     void saveSetting("dashboard_narratives_filter_module", filterModule);
     void saveSetting("dashboard_narratives_search", search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyMinutes, limit, filterModule, search]);
+  }, [historyMinutes, limit, filterModule, search, loadHistory, saveSetting]);
 
   useEffect(() => {
     void saveSetting("dashboard_show_ids", String(showIds));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showIds]);
+  }, [showIds, saveSetting]);
 
   useEffect(() => {
     const es = new EventSource("/api/narratives/stream");
@@ -239,11 +260,23 @@ export function LiveNarrativesFeed() {
       <div style={{ fontSize: 20, fontWeight: 700 }}>{header}</div>
       <div style={{ height: 10 }} />
       <div className="muted" style={{ marginBottom: 12 }}>
-        Showing history from Postgres + streaming <code>feedeater.*.narrativeUpdated</code> from NATS via SSE.
+        Showing history from Postgres + streaming <code>feedeater.*.narrativeUpdated</code> from
+        NATS via SSE.
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           History (minutes)
           <input
             type="number"
@@ -252,13 +285,28 @@ export function LiveNarrativesFeed() {
             style={{ width: 90 }}
           />
         </label>
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           Limit
-          <input type="number" value={limit} onChange={(e) => setLimit(Number(e.target.value))} style={{ width: 80 }} />
+          <input
+            type="number"
+            value={limit}
+            onChange={(e) => setLimit(Number(e.target.value))}
+            style={{ width: 80 }}
+          />
         </label>
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           Module
-          <select value={filterModule} onChange={(e) => setFilterModule(e.target.value)} style={{ minWidth: 150 }}>
+          <select
+            value={filterModule}
+            onChange={(e) => setFilterModule(e.target.value)}
+            style={{ minWidth: 150 }}
+          >
             <option value="">All</option>
             {modules.map((m) => (
               <option key={m} value={m}>
@@ -267,11 +315,21 @@ export function LiveNarrativesFeed() {
             ))}
           </select>
         </label>
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           Search
-          <input value={search} onChange={(e) => setSearch(e.target.value)} style={{ minWidth: 240 }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ minWidth: 240 }}
+          />
         </label>
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           <input type="checkbox" checked={showIds} onChange={(e) => setShowIds(e.target.checked)} />
           Show IDs
         </label>
@@ -294,11 +352,22 @@ export function LiveNarrativesFeed() {
           const msgs = messagesById[id] ?? [];
 
           return (
-            <div key={id} style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+            <div
+              key={id}
+              style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 12 }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  alignItems: "baseline",
+                }}
+              >
                 <div style={{ fontWeight: 700 }}>{nv.summaryShort || "(no summary)"}</div>
                 <div className="muted" style={{ fontSize: 12 }}>
-                  {nv.ownerModule} · {new Date(nv.updatedAt).toLocaleString()} · messages: {nv.messageCount}
+                  {nv.ownerModule} · {new Date(nv.updatedAt).toLocaleString()} · messages:{" "}
+                  {nv.messageCount}
                 </div>
               </div>
 
@@ -316,6 +385,7 @@ export function LiveNarrativesFeed() {
 
               <div style={{ marginTop: 10 }}>
                 <button
+                  type="button"
                   onClick={() => void toggleMessages(nv)}
                   style={{
                     padding: "8px 10px",
@@ -352,9 +422,17 @@ export function LiveNarrativesFeed() {
                           source?: { module?: string; stream?: string };
                         };
                         return (
-                          <div key={m.id} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 8 }}>
+                          <div
+                            key={m.id}
+                            style={{
+                              border: "1px solid var(--border)",
+                              borderRadius: 10,
+                              padding: 8,
+                            }}
+                          >
                             <div className="muted" style={{ fontSize: 12 }}>
-                              {raw.source?.module ?? "unknown"} · {new Date(m.createdAt).toLocaleString()}
+                              {raw.source?.module ?? "unknown"} ·{" "}
+                              {new Date(m.createdAt).toLocaleString()}
                               {showIds ? (
                                 <>
                                   {" "}
@@ -364,7 +442,9 @@ export function LiveNarrativesFeed() {
                             </div>
                             <div style={{ marginTop: 4 }}>
                               <strong>{raw.From ?? "unknown"}</strong>:{" "}
-                              {raw.Message ? renderMessageText(String(raw.Message)) : "(no message text)"}
+                              {raw.Message
+                                ? renderMessageText(String(raw.Message))
+                                : "(no message text)"}
                             </div>
                           </div>
                         );

@@ -15,8 +15,7 @@
     "build": "tsup src/index.ts --format esm --dts",
     "generate": "prisma generate",
     "db:push": "prisma db push",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"(no lint configured yet)\""
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@prisma/client": "^6.1.0"
@@ -27,5 +26,3 @@
     "typescript": "^5.9.2"
   }
 }
-
-

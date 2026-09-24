@@ -14,22 +14,34 @@ function renderMessageText(text: string) {
       const label = match[1];
       const href = match[2];
       parts.push(
-        <a key={`${match.index}-${href}`} href={href} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+        <a
+          key={`${match.index}-${href}`}
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "var(--accent)" }}
+        >
           {label}
-        </a>
+        </a>,
       );
     } else if (match[3]) {
       const href = match[3];
       parts.push(
-        <a key={`${match.index}-${href}`} href={href} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+        <a
+          key={`${match.index}-${href}`}
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: "var(--accent)" }}
+        >
           {href}
-        </a>
+        </a>,
       );
     }
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts.length ? <>{parts}</> : text;
+  return parts.length ? parts : text;
 }
 
 type BusEnvelope = {
@@ -61,7 +73,10 @@ type BusEnvelope = {
 };
 
 type ModulesResponse = { modules: Array<{ name: string }> };
-type SettingsResponse = { module: string; settings: Array<{ key: string; isSecret: boolean; value: string | null }> };
+type SettingsResponse = {
+  module: string;
+  settings: Array<{ key: string; isSecret: boolean; value: string | null }>;
+};
 type BusHistoryResponse =
   | { ok: true; sinceMinutes: number; limit: number; items: BusEnvelope[] }
   | { ok: false; error: string };
@@ -158,7 +173,7 @@ export function LiveBusFeed() {
   useEffect(() => {
     void loadSettingsAndModules();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadSettingsAndModules]);
 
   useEffect(() => {
     // Reload history when filters change.
@@ -170,12 +185,12 @@ export function LiveBusFeed() {
     void saveSetting("dashboard_bus_filter_stream", filterStream);
     void saveSetting("dashboard_bus_search", search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyMinutes, limit, filterModule, filterStream, search]);
+  }, [historyMinutes, limit, filterModule, filterStream, search, loadHistory, saveSetting]);
 
   useEffect(() => {
     void saveSetting("dashboard_show_ids", String(showIds));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showIds]);
+  }, [showIds, saveSetting]);
 
   useEffect(() => {
     const es = new EventSource("/api/bus/stream");
@@ -227,11 +242,23 @@ export function LiveBusFeed() {
       <div style={{ height: 10 }} />
 
       <div className="muted" style={{ marginBottom: 12 }}>
-        Showing history from Postgres + streaming <code>feedeater.*.messageCreated</code> from NATS via SSE.
+        Showing history from Postgres + streaming <code>feedeater.*.messageCreated</code> from NATS
+        via SSE.
       </div>
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           History (minutes)
           <input
             type="number"
@@ -251,7 +278,10 @@ export function LiveBusFeed() {
           />
         </label>
 
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           Limit
           <input
             type="number"
@@ -271,7 +301,10 @@ export function LiveBusFeed() {
           />
         </label>
 
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           Module
           <select
             value={filterModule}
@@ -294,7 +327,10 @@ export function LiveBusFeed() {
           </select>
         </label>
 
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           Stream
           <input
             value={filterStream}
@@ -327,12 +363,16 @@ export function LiveBusFeed() {
             outline: "none",
           }}
         />
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
           <input type="checkbox" checked={showIds} onChange={(e) => setShowIds(e.target.checked)} />
           Show IDs
         </label>
 
         <button
+          type="button"
           onClick={() => void loadHistory()}
           disabled={loadingHistory}
           style={{
@@ -351,7 +391,9 @@ export function LiveBusFeed() {
       </div>
 
       {historyError ? (
-        <div style={{ marginBottom: 12, color: "rgba(255,120,120,0.9)", fontSize: 12 }}>{historyError}</div>
+        <div style={{ marginBottom: 12, color: "rgba(255,120,120,0.9)", fontSize: 12 }}>
+          {historyError}
+        </div>
       ) : null}
 
       <div style={{ display: "grid", gap: 10 }}>
@@ -394,17 +436,26 @@ export function LiveBusFeed() {
                 ) : null}
 
                 {m.Message ? (
-                  <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{renderMessageText(m.Message)}</div>
+                  <div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>
+                    {renderMessageText(m.Message)}
+                  </div>
                 ) : null}
 
                 <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
                   {m.isDirectMention ? <span className="muted">directMention</span> : null}
                   {m.isDigest ? <span className="muted">digest</span> : null}
                   {m.isSystemMessage ? <span className="muted">system</span> : null}
-                  {typeof m.likes === "number" ? <span className="muted">likes: {m.likes}</span> : null}
+                  {typeof m.likes === "number" ? (
+                    <span className="muted">likes: {m.likes}</span>
+                  ) : null}
                   {m.followMePanel ? (
                     m.followMePanel.href ? (
-                      <a href={m.followMePanel.href} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                      <a
+                        href={m.followMePanel.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: "var(--accent)" }}
+                      >
                         {m.followMePanel.label ?? "Follow"}
                       </a>
                     ) : (
@@ -422,5 +473,3 @@ export function LiveBusFeed() {
     </div>
   );
 }
-
-

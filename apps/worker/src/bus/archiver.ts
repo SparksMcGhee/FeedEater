@@ -1,8 +1,7 @@
-import { consumerOpts, RetentionPolicy, StorageType, StringCodec } from "nats";
+import { BusEventSchema } from "@feedeater/core";
 import type { NatsConnection } from "nats";
+import { consumerOpts, RetentionPolicy, StorageType, StringCodec } from "nats";
 import type { Pool } from "pg";
-
-import { BusEventSchema, MessageCreatedEventSchema, TagAppendedEventSchema } from "@feedeater/core";
 
 const STREAM_NAME = "feedeater_bus";
 const DURABLE_NAME = "feedeater_archiver";
@@ -27,8 +26,8 @@ export async function startBusArchiver(params: {
             at: new Date().toISOString(),
             message,
             meta,
-          })
-        )
+          }),
+        ),
       );
     } catch {
       // ignore
@@ -40,15 +39,23 @@ export async function startBusArchiver(params: {
   const maxAgeSecondsRaw = sys.jetstream_max_age_seconds;
   const defaultMaxAgeSeconds = 30 * 24 * 3600;
   const parsedMaxAgeSeconds =
-    maxAgeSecondsRaw === null || maxAgeSecondsRaw === undefined ? NaN : Number(String(maxAgeSecondsRaw).trim());
+    maxAgeSecondsRaw === null || maxAgeSecondsRaw === undefined
+      ? NaN
+      : Number(String(maxAgeSecondsRaw).trim());
   const maxAgeSeconds =
-    Number.isFinite(parsedMaxAgeSeconds) && parsedMaxAgeSeconds >= 0.1 ? parsedMaxAgeSeconds : defaultMaxAgeSeconds;
+    Number.isFinite(parsedMaxAgeSeconds) && parsedMaxAgeSeconds >= 0.1
+      ? parsedMaxAgeSeconds
+      : defaultMaxAgeSeconds;
   // JetStream max_age is in nanoseconds and must be >= 100ms.
   // Keep as a JS number (avoid bigint edge cases) — 30d is well within Number.MAX_SAFE_INTEGER.
   const maxAgeNanos = Math.max(100_000_000, Math.floor(maxAgeSeconds * 1_000_000_000));
 
   const jsm = await params.nc.jetstreamManager();
-  publishLog("info", "archiver starting (jetstream retention)", { maxAgeSecondsRaw, maxAgeSeconds, maxAgeNanos });
+  publishLog("info", "archiver starting (jetstream retention)", {
+    maxAgeSecondsRaw,
+    maxAgeSeconds,
+    maxAgeNanos,
+  });
   try {
     await jsm.streams.info(STREAM_NAME);
     const cfg = {
@@ -59,7 +66,11 @@ export async function startBusArchiver(params: {
       max_age: maxAgeNanos,
     } as const;
     // eslint-disable-next-line no-console
-    console.log("[archiver] updating stream", { name: cfg.name, max_age: cfg.max_age, typeof_max_age: typeof cfg.max_age });
+    console.log("[archiver] updating stream", {
+      name: cfg.name,
+      max_age: cfg.max_age,
+      typeof_max_age: typeof cfg.max_age,
+    });
     await jsm.streams.update(STREAM_NAME, cfg);
   } catch {
     const cfg = {
@@ -70,7 +81,11 @@ export async function startBusArchiver(params: {
       max_age: maxAgeNanos,
     } as const;
     // eslint-disable-next-line no-console
-    console.log("[archiver] adding stream", { name: cfg.name, max_age: cfg.max_age, typeof_max_age: typeof cfg.max_age });
+    console.log("[archiver] adding stream", {
+      name: cfg.name,
+      max_age: cfg.max_age,
+      typeof_max_age: typeof cfg.max_age,
+    });
     await jsm.streams.add(cfg);
   }
 
@@ -129,7 +144,7 @@ export async function startBusArchiver(params: {
         typeof msg.likes === "number" ? msg.likes : null,
         msg.tags ?? {},
         msgForArchive,
-      ]
+      ],
     );
   }
 
@@ -144,7 +159,14 @@ export async function startBusArchiver(params: {
       ) VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (id) DO NOTHING
       `,
-      [parsed.id, parsed.createdAt, parsed.createdByModule, parsed.messageId, parsed.key, parsed.value]
+      [
+        parsed.id,
+        parsed.createdAt,
+        parsed.createdByModule,
+        parsed.messageId,
+        parsed.key,
+        parsed.value,
+      ],
     );
   }
 
@@ -160,7 +182,7 @@ export async function startBusArchiver(params: {
         publishLog(
           "error",
           "archiver failed to archive message",
-          err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+          err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err,
         );
       }
     }
@@ -170,7 +192,7 @@ export async function startBusArchiver(params: {
     publishLog(
       "error",
       "archiver message loop crashed",
-      err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+      err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err,
     );
   });
 
@@ -185,7 +207,7 @@ export async function startBusArchiver(params: {
         publishLog(
           "error",
           "archiver failed to archive tag",
-          err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+          err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err,
         );
       }
     }
@@ -195,9 +217,7 @@ export async function startBusArchiver(params: {
     publishLog(
       "error",
       "archiver tag loop crashed",
-      err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err
+      err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : err,
     );
   });
 }
-
-

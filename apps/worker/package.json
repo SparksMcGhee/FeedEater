@@ -7,7 +7,6 @@
     "dev": "node --watch dist/index.js",
     "build": "tsup src/index.ts --format esm",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo \"(no lint configured yet)\"",
     "start": "node dist/index.js"
   },
   "dependencies": {
@@ -26,5 +25,3 @@
     "typescript": "^5.9.2"
   }
 }
-
-

@@ -43,7 +43,10 @@ export function SlackChannelsCard() {
     setLoading(true);
     try {
       const url = new URL("/api/modules/slack/channels", window.location.origin);
-      url.searchParams.set("types", includePrivate ? "public_channel,private_channel" : "public_channel");
+      url.searchParams.set(
+        "types",
+        includePrivate ? "public_channel,private_channel" : "public_channel",
+      );
       url.searchParams.set("includeArchived", includeArchived ? "true" : "false");
       const res = await fetch(url.toString(), { cache: "no-store" });
       const json = (await res.json()) as SlackChannelsApiResponse;
@@ -61,11 +64,14 @@ export function SlackChannelsCard() {
   async function saveChannelNameMap(channels: SlackChannel[]) {
     try {
       const map = Object.fromEntries(channels.map((c) => [c.id, c.name]));
-      const res = await fetch(`/api/settings/${encodeURIComponent("slack")}/${encodeURIComponent("channelNameMap")}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ value: JSON.stringify(map), isSecret: false }),
-      });
+      const res = await fetch(
+        `/api/settings/${encodeURIComponent("slack")}/${encodeURIComponent("channelNameMap")}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ value: JSON.stringify(map), isSecret: false }),
+        },
+      );
       if (!res.ok) throw new Error(`Save channel map failed (${res.status})`);
     } catch {
       // ignore: best-effort cache for background jobs
@@ -94,11 +100,14 @@ export function SlackChannelsCard() {
     setSaveError(null);
     try {
       const value = [...next].join(",");
-      const res = await fetch(`/api/settings/${encodeURIComponent("slack")}/${encodeURIComponent("channelIds")}`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ value, isSecret: false }),
-      });
+      const res = await fetch(
+        `/api/settings/${encodeURIComponent("slack")}/${encodeURIComponent("channelIds")}`,
+        {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ value, isSecret: false }),
+        },
+      );
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new Error(`Save failed (${res.status}) ${body}`);
@@ -115,10 +124,10 @@ export function SlackChannelsCard() {
     void loadChannels();
     void loadSelectedFromSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadSelectedFromSettings, loadChannels]);
 
   const items = useMemo<SlackChannel[]>(() => {
-    if (!data || !data.ok) return [];
+    if (!data?.ok) return [];
     const q = query.trim().toLowerCase();
     return data.channels.filter((c: SlackChannel) => {
       if (onlyMember && !c.isMember) return false;
@@ -139,13 +148,14 @@ export function SlackChannelsCard() {
   return (
     <div style={{ display: "grid", gap: 10 }}>
       <div className="muted" style={{ fontSize: 12 }}>
-        Lists channels the saved <code>botToken</code> can see. Required Slack scopes: <code>channels:read</code> (public
-        channels) and <code>groups:read</code> (private channels). After changing scopes, reinstall the Slack app to refresh
-        the token.
+        Lists channels the saved <code>botToken</code> can see. Required Slack scopes:{" "}
+        <code>channels:read</code> (public channels) and <code>groups:read</code> (private
+        channels). After changing scopes, reinstall the Slack app to refresh the token.
       </div>
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <button
+          type="button"
           onClick={() => void loadChannels()}
           disabled={loading}
           style={{
@@ -162,6 +172,7 @@ export function SlackChannelsCard() {
         </button>
 
         <button
+          type="button"
           onClick={() => setModalOpen(true)}
           disabled={!data || (data.ok && data.channels.length === 0)}
           style={{
@@ -182,18 +193,39 @@ export function SlackChannelsCard() {
           Selected: <b>{selectedCount}</b>
         </div>
 
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-          <input type="checkbox" checked={onlyMember} onChange={(e) => setOnlyMember(e.target.checked)} />
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
+          <input
+            type="checkbox"
+            checked={onlyMember}
+            onChange={(e) => setOnlyMember(e.target.checked)}
+          />
           Only show channels the bot is in
         </label>
 
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-          <input type="checkbox" checked={includePrivate} onChange={(e) => setIncludePrivate(e.target.checked)} />
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
+          <input
+            type="checkbox"
+            checked={includePrivate}
+            onChange={(e) => setIncludePrivate(e.target.checked)}
+          />
           Include private channels
         </label>
 
-        <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-          <input type="checkbox" checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
+        <label
+          className="muted"
+          style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+        >
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(e) => setIncludeArchived(e.target.checked)}
+          />
           Include archived
         </label>
 
@@ -219,19 +251,22 @@ export function SlackChannelsCard() {
           {data.error}
           {data.error.includes("missing_scope") ? (
             <div className="muted" style={{ marginTop: 6 }}>
-              Tip: if you only want public channels, uncheck “Include private channels”. Otherwise add <code>channels:read</code>{" "}
-              and <code>groups:read</code> to your Slack app, reinstall it, then update the saved <code>botToken</code>.
+              Tip: if you only want public channels, uncheck “Include private channels”. Otherwise
+              add <code>channels:read</code> and <code>groups:read</code> to your Slack app,
+              reinstall it, then update the saved <code>botToken</code>.
             </div>
           ) : null}
         </div>
       ) : null}
 
-      {saveError ? <div style={{ color: "rgba(255,120,120,0.9)", fontSize: 12 }}>{saveError}</div> : null}
+      {saveError ? (
+        <div style={{ color: "rgba(255,120,120,0.9)", fontSize: 12 }}>{saveError}</div>
+      ) : null}
 
-      {data && data.ok ? (
+      {data?.ok ? (
         <div className="muted" style={{ fontSize: 12 }}>
-          Found <b>{data.channels.length}</b> channels (paged in <b>{data.pages}</b> request{data.pages === 1 ? "" : "s"}). Showing{" "}
-          <b>{items.length}</b>.
+          Found <b>{data.channels.length}</b> channels (paged in <b>{data.pages}</b> request
+          {data.pages === 1 ? "" : "s"}). Showing <b>{items.length}</b>.
         </div>
       ) : null}
 
@@ -254,6 +289,7 @@ export function SlackChannelsCard() {
           }}
           onMouseDown={() => setModalOpen(false)}
         >
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: stop-propagation guard on the modal panel, not an interactive control */}
           <div
             className="card"
             style={{
@@ -267,9 +303,17 @@ export function SlackChannelsCard() {
             }}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "baseline",
+              }}
+            >
               <div style={{ fontSize: 16, fontWeight: 700 }}>Slack Channels</div>
               <button
+                type="button"
                 onClick={() => setModalOpen(false)}
                 style={{
                   padding: "8px 10px",
@@ -287,7 +331,8 @@ export function SlackChannelsCard() {
             </div>
 
             <div className="muted" style={{ fontSize: 12 }}>
-              Selected IDs persist to <code>slack.channelIds</code>. {saving ? <b>Saving…</b> : null}
+              Selected IDs persist to <code>slack.channelIds</code>.{" "}
+              {saving ? <b>Saving…</b> : null}
               {selectedIds.size === 0 ? (
                 <span style={{ marginLeft: 8 }}>
                   (Note: Slack collector will error until at least one channel ID is selected.)
@@ -296,12 +341,20 @@ export function SlackChannelsCard() {
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <label className="muted" style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}>
-                <input type="checkbox" checked={onlyMember} onChange={(e) => setOnlyMember(e.target.checked)} />
+              <label
+                className="muted"
+                style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={onlyMember}
+                  onChange={(e) => setOnlyMember(e.target.checked)}
+                />
                 Only show channels the bot is in
               </label>
               <div className="muted" style={{ fontSize: 12 }}>
-                (If Slack shows <code>not_in_channel</code>, remove that ChannelID or invite the bot to it.)
+                (If Slack shows <code>not_in_channel</code>, remove that ChannelID or invite the bot
+                to it.)
               </div>
             </div>
 
@@ -324,7 +377,14 @@ export function SlackChannelsCard() {
                           background: "rgba(255,255,255,0.03)",
                         }}
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 12,
+                            alignItems: "baseline",
+                          }}
+                        >
                           <div style={{ fontWeight: 700 }}>#{c.name}</div>
                           <div className="muted" style={{ fontSize: 12 }}>
                             {c.isPrivate ? "private · " : "public · "}
@@ -336,18 +396,28 @@ export function SlackChannelsCard() {
 
                         <div style={{ height: 8 }} />
 
-                        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <div className="muted" style={{ fontSize: 12 }}>
                             ChannelID: <code>{c.id}</code>
                           </div>
                           <button
+                            type="button"
                             onClick={() => void toggleChannel(c.id)}
                             disabled={saving}
                             style={{
                               padding: "8px 10px",
                               borderRadius: 12,
                               border: "1px solid var(--border)",
-                              background: selected ? "rgba(124,58,237,0.22)" : "rgba(255,255,255,0.04)",
+                              background: selected
+                                ? "rgba(124,58,237,0.22)"
+                                : "rgba(255,255,255,0.04)",
                               color: "var(--text)",
                               cursor: "pointer",
                               fontWeight: 700,
@@ -360,7 +430,10 @@ export function SlackChannelsCard() {
                         </div>
 
                         {c.topic || c.purpose ? (
-                          <div className="muted" style={{ marginTop: 8, fontSize: 12, whiteSpace: "pre-wrap" }}>
+                          <div
+                            className="muted"
+                            style={{ marginTop: 8, fontSize: 12, whiteSpace: "pre-wrap" }}
+                          >
                             {c.topic ? <>Topic: {c.topic}</> : null}
                             {c.topic && c.purpose ? <span> · </span> : null}
                             {c.purpose ? <>Purpose: {c.purpose}</> : null}
@@ -378,5 +451,3 @@ export function SlackChannelsCard() {
     </div>
   );
 }
-
-

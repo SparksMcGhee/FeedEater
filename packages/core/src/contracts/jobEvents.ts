@@ -18,4 +18,3 @@ export const JobRunEventSchema = z.object({
   data: z.unknown().optional(),
 });
 export type JobRunEvent = z.infer<typeof JobRunEventSchema>;
-

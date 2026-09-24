@@ -9,7 +9,9 @@ const linkStyle: React.CSSProperties = {
 
 export function Nav() {
   return (
-    <div style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+    <div
+      style={{ display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}
+    >
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <div style={{ fontWeight: 700, letterSpacing: 0.4 }}>FeedEater</div>
         <div className="muted" style={{ fontSize: 13 }}>
@@ -37,5 +39,3 @@ export function Nav() {
     </div>
   );
 }
-
-

@@ -1,8 +1,7 @@
-import type { Request, Response } from "express";
-import type { NatsConnection, StringCodec } from "nats";
-
 import { JobRunEventSchema, jobSubjectFor } from "@feedeater/core";
 import { prisma } from "@feedeater/db";
+import type { Request, Response } from "express";
+import type { NatsConnection, StringCodec } from "nats";
 
 import { discoverModules } from "./modules.js";
 
@@ -17,14 +16,20 @@ function isNonEmptyString(x: unknown): x is string {
   return typeof x === "string" && x.trim().length > 0;
 }
 
-export function postRunJob(params: { modulesDir: string; getNatsConn: () => Promise<NatsConnection>; sc: StringCodec }) {
+export function postRunJob(params: {
+  modulesDir: string;
+  getNatsConn: () => Promise<NatsConnection>;
+  sc: StringCodec;
+}) {
   return async (req: Request, res: Response) => {
     try {
       const body = (req.body ?? {}) as RunJobBody;
       const moduleName = isNonEmptyString(body.module) ? body.module.trim() : "";
       const jobName = isNonEmptyString(body.job) ? body.job.trim() : "";
       if (!moduleName || !jobName) {
-        res.status(400).json({ ok: false, error: "Body must include { module: string, job: string }" });
+        res
+          .status(400)
+          .json({ ok: false, error: "Body must include { module: string, job: string }" });
         return;
       }
 
@@ -116,5 +121,3 @@ export function getJobsStatus(params: { modulesDir: string }) {
     }
   };
 }
-
-

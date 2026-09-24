@@ -15,9 +15,11 @@
     "build": "npm run -ws build",
     "typecheck": "npm run -ws typecheck",
     "lint": "biome check .",
-    "lint:fix": "biome check --write ."
+    "lint:fix": "biome check --write .",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.14"
+    "@biomejs/biome": "^2.5.14",
+    "vitest": "^5.0.1"
   }
 }

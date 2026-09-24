@@ -49,10 +49,26 @@ const NormalizedMessageInputSchema = z.object({
   tags: MessageTagsSchema.default({}),
 });
 
-export const NormalizedMessageSchema = NormalizedMessageInputSchema.transform((data) => {
-  const { contextRef, narrativeRef, ...rest } = data;
-  const ref = narrativeRef ?? contextRef;
-  return ref !== undefined ? { ...rest, narrativeRef: ref } : { ...rest };
-});
+export const NormalizedMessageSchema = NormalizedMessageInputSchema.transform(
+  (data): NormalizedMessage => {
+    const { contextRef, narrativeRef, ...rest } = data;
+    const ref = narrativeRef ?? contextRef;
+    return ref !== undefined ? { ...rest, narrativeRef: ref } : { ...rest };
+  },
+);
 
-export type NormalizedMessage = z.output<typeof NormalizedMessageSchema>;
+export type NormalizedMessage = {
+  id: string;
+  createdAt: string;
+  source: { module: string; stream?: string | undefined };
+  realtime?: boolean | undefined;
+  Message?: string | undefined;
+  narrativeRef?: MessageNarrativeRef | undefined;
+  followMePanel?: FollowMePanel | undefined;
+  From?: string | undefined;
+  isDirectMention: boolean;
+  isDigest: boolean;
+  isSystemMessage: boolean;
+  likes?: number | undefined;
+  tags: MessageTags;
+};

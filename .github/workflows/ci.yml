@@ -18,6 +18,8 @@ jobs:
       - name: Generate Prisma client (types for typecheck; schema path is non-default)
         run: npm run -w @feedeater/db generate
       - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test
 
   compose-smoke:
     # Seed of acceptance gate 3 (plan 04): full stack up, health-gated, torn down.

@@ -15,8 +15,6 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Generate Prisma client (types for typecheck; schema path is non-default)
-        run: npm run -w @feedeater/db generate
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run test
@@ -30,8 +28,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Start backing services
         run: docker compose up -d postgres nats
-      - name: Apply schema (fresh CI database; interim until plan 03 migrations)
-        run: docker compose run --rm --workdir /app api npx prisma db push --schema packages/db/prisma/schema.prisma
+      - name: Apply migrations
+        run: docker compose run --rm --workdir /app api node packages/db/dist/migrate.js
       - name: Build and start the stack
         run: docker compose up -d --build
       - name: Wait for API health

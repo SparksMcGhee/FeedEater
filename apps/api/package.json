@@ -12,6 +12,7 @@
   "dependencies": {
     "@feedeater/core": "0.0.1",
     "@feedeater/db": "0.0.1",
+    "drizzle-orm": "^0.45.3",
     "express": "^4.21.2",
     "nats": "^2.29.3"
   },

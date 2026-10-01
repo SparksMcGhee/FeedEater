@@ -26,8 +26,8 @@ done
 log "pulling :$TAG images"
 "${DC[@]}" pull --quiet
 
-# Migrations (interim: prisma db push via the api image; plan 03 replaces with drizzle-kit).
-"${DC[@]}" run --rm --workdir /app api npx prisma db push --schema packages/db/prisma/schema.prisma
+# Migrations (versioned SQL, drizzle migrator ledger).
+"${DC[@]}" run --rm --workdir /app api node packages/db/dist/migrate.js
 
 "${DC[@]}" up -d --remove-orphans
 

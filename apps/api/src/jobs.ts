@@ -1,5 +1,6 @@
 import { JobRunEventSchema, jobSubjectFor } from "@feedeater/core";
-import { prisma } from "@feedeater/db";
+import { db, jobRun, jobState } from "@feedeater/db";
+import { and, desc, eq } from "drizzle-orm";
 import type { Request, Response } from "express";
 import type { NatsConnection, StringCodec } from "nats";
 
@@ -47,16 +48,14 @@ export function postRunJob(params: {
       }
 
       const runId = crypto.randomUUID();
-      await prisma.jobRun.create({
-        data: {
-          id: runId,
-          module: moduleName,
-          job: job.name,
-          queue: job.queue,
-          status: "queued",
-          triggerType: "manual",
-          triggerJson: { manual: true },
-        },
+      await db.insert(jobRun).values({
+        id: runId,
+        module: moduleName,
+        job: job.name,
+        queue: job.queue,
+        status: "queued",
+        triggerType: "manual",
+        triggerJson: { manual: true },
       });
 
       const payload = JobRunEventSchema.parse({
@@ -85,7 +84,7 @@ export function getJobsStatus(params: { modulesDir: string }) {
   return async (_req: Request, res: Response) => {
     try {
       const modules = await discoverModules(params.modulesDir);
-      const states = await prisma.jobState.findMany();
+      const states = await db.select().from(jobState);
       const stateByKey = new Map(states.map((s) => [`${s.module}.${s.job}`, s]));
 
       const jobs = [];
@@ -93,11 +92,14 @@ export function getJobsStatus(params: { modulesDir: string }) {
         for (const j of m.jobs ?? []) {
           const key = `${m.name}.${j.name}`;
           const state = stateByKey.get(key);
-          const lastRun = await prisma.jobRun.findFirst({
-            where: { module: m.name, job: j.name },
-            orderBy: { createdAt: "desc" },
-            select: { status: true, createdAt: true },
-          });
+          const lastRun = (
+            await db
+              .select({ status: jobRun.status, createdAt: jobRun.createdAt })
+              .from(jobRun)
+              .where(and(eq(jobRun.module, m.name), eq(jobRun.job, j.name)))
+              .orderBy(desc(jobRun.createdAt))
+              .limit(1)
+          )[0];
           jobs.push({
             module: m.name,
             job: j.name,

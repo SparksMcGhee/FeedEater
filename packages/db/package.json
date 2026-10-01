@@ -12,16 +12,17 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
-    "generate": "prisma generate",
-    "db:push": "prisma db push",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "tsup src/index.ts src/migrate.ts --format esm --dts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "migrate": "node dist/migrate.js",
+    "generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@prisma/client": "^6.1.0"
+    "drizzle-orm": "^0.45.3",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "prisma": "^6.1.0",
+    "drizzle-kit": "^0.31.11",
     "tsup": "^8.5.0",
     "typescript": "^5.9.2"
   }

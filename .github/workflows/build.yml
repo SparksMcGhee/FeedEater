@@ -56,8 +56,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Start backing services
         run: docker compose -f docker-compose.prod.yml up -d postgres nats
-      - name: Apply schema (fresh CI database; mirrors the deploy agent's flow)
-        run: docker compose -f docker-compose.prod.yml run --rm --workdir /app api npx prisma db push --schema packages/db/prisma/schema.prisma
+      - name: Apply migrations (mirrors the deploy agent's flow)
+        run: docker compose -f docker-compose.prod.yml run --rm --workdir /app api node packages/db/dist/migrate.js
       - name: Start stack from sha-tagged images
         run: docker compose -f docker-compose.prod.yml up -d
       - name: Wait for API health

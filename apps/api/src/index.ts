@@ -1,4 +1,5 @@
-import { prisma } from "@feedeater/db";
+import { busNarrative, db } from "@feedeater/db";
+import { and, eq } from "drizzle-orm";
 import type { NextFunction, Request, Response } from "express";
 import express from "express";
 import { connect, StringCodec } from "nats";
@@ -97,16 +98,17 @@ app.get("/api/bus/stream", async (req: Request, res: Response) => {
           const msg = (data as any)?.message;
           const ref = msg?.narrativeRef ?? msg?.contextRef;
           if (ref?.ownerModule && ref?.sourceKey) {
-            const nv = await prisma.busNarrative.findUnique({
-              where: {
-                ownerModule_sourceKey: {
-                  ownerModule: String(ref.ownerModule),
-                  sourceKey: String(ref.sourceKey),
-                },
-              },
-              select: { summaryShort: true },
-            });
-            narrativeSummaryShort = nv?.summaryShort ?? null;
+            const nv = await db
+              .select({ summaryShort: busNarrative.summaryShort })
+              .from(busNarrative)
+              .where(
+                and(
+                  eq(busNarrative.ownerModule, String(ref.ownerModule)),
+                  eq(busNarrative.sourceKey, String(ref.sourceKey)),
+                ),
+              )
+              .limit(1);
+            narrativeSummaryShort = nv[0]?.summaryShort ?? null;
           }
         } catch {
           // ignore

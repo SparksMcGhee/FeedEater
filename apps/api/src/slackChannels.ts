@@ -1,4 +1,5 @@
-import { prisma } from "@feedeater/db";
+import { db, setting } from "@feedeater/db";
+import { and, eq } from "drizzle-orm";
 import type { Request, Response } from "express";
 
 import { decryptSecret } from "./crypto.js";
@@ -33,9 +34,14 @@ export type SlackChannelSummary = {
 };
 
 async function loadSlackBotToken(): Promise<string> {
-  const row = await prisma.setting.findUnique({
-    where: { module_key: { module: "slack", key: "botToken" } },
-  });
+  const row =
+    (
+      await db
+        .select()
+        .from(setting)
+        .where(and(eq(setting.module, "slack"), eq(setting.key, "botToken")))
+        .limit(1)
+    )[0] ?? null;
   if (!row?.value) {
     const err = new Error('Slack setting "botToken" is required');
     (err as any).statusCode = 400;

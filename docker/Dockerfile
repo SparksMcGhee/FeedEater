@@ -22,12 +22,12 @@ FROM deps AS build
 COPY . .
 RUN npm run -w @feedeater/core build \
  && npm run -w @feedeater/module-sdk build \
- && npm run -w @feedeater/db generate \
  && npm run -w @feedeater/db build
 
 # ---- per-app build variants (mirror the original per-image builds) ----------
 FROM build AS build-api
-RUN npm run -w @feedeater/module-example build \
+RUN mkdir -p /app/apps/api/node_modules /app/packages/db/node_modules \
+ && npm run -w @feedeater/module-example build \
  && npm run -w @feedeater/module-slack build \
  && npm run -w @feedeater/api build
 
@@ -50,9 +50,11 @@ COPY --from=build-api /app/packages/core/package.json ./packages/core/package.js
 COPY --from=build-api /app/packages/core/dist ./packages/core/dist
 COPY --from=build-api /app/packages/db/package.json ./packages/db/package.json
 COPY --from=build-api /app/packages/db/dist ./packages/db/dist
-COPY --from=build-api /app/packages/db/prisma ./packages/db/prisma
+COPY --from=build-api /app/packages/db/migrations ./packages/db/migrations
+COPY --from=build-api /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=build-api /app/modules ./modules
 COPY --from=build-api /app/apps/api/package.json ./apps/api/package.json
+COPY --from=build-api /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build-api /app/apps/api/dist ./apps/api/dist
 EXPOSE 4000
 WORKDIR /app/apps/api

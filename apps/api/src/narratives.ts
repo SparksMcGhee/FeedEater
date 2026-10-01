@@ -1,10 +1,15 @@
 import { NarrativeUpdatedEventSchema } from "@feedeater/core";
-import { prisma } from "@feedeater/db";
+import { busMessage, busNarrative, busNarrativeMessage, db } from "@feedeater/db";
+import { and, asc, count, desc, eq, gte, ilike, inArray, or, type SQL } from "drizzle-orm";
 import type { Request, Response } from "express";
 import type { NatsConnection, StringCodec } from "nats";
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
+}
+
+function likeParam(q: string): string {
+  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
 function normalizeKeyPoints(value: unknown): string[] {
@@ -26,23 +31,37 @@ export function getNarrativesHistory(req: Request, res: Response) {
       const q = typeof qRaw === "string" ? qRaw.trim() : "";
 
       const since = new Date(Date.now() - sinceMinutes * 60_000);
-      const rows = await prisma.busNarrative.findMany({
-        where: {
-          ...(sinceMinutes > 0 ? { updatedAt: { gte: since } } : {}),
-          ...(moduleFilter ? { ownerModule: moduleFilter } : {}),
-          ...(q
-            ? {
-                OR: [
-                  { summaryShort: { contains: q, mode: "insensitive" } },
-                  { summaryLong: { contains: q, mode: "insensitive" } },
-                ],
-              }
-            : {}),
-        },
-        orderBy: { updatedAt: "desc" },
-        take: limit,
-        include: { _count: { select: { messages: true } } },
-      });
+      const conditions: SQL[] = [];
+      if (sinceMinutes > 0) conditions.push(gte(busNarrative.updatedAt, since));
+      if (moduleFilter) conditions.push(eq(busNarrative.ownerModule, moduleFilter));
+      if (q)
+        conditions.push(
+          or(
+            ilike(busNarrative.summaryShort, likeParam(q)),
+            ilike(busNarrative.summaryLong, likeParam(q)),
+          )!,
+        );
+
+      const rows = await db
+        .select()
+        .from(busNarrative)
+        .where(and(...conditions))
+        .orderBy(desc(busNarrative.updatedAt))
+        .limit(limit);
+
+      const countRows = rows.length
+        ? await db
+            .select({ narrativeId: busNarrativeMessage.narrativeId, c: count() })
+            .from(busNarrativeMessage)
+            .where(
+              inArray(
+                busNarrativeMessage.narrativeId,
+                rows.map((r) => r.id),
+              ),
+            )
+            .groupBy(busNarrativeMessage.narrativeId)
+        : [];
+      const counts = new Map(countRows.map((x) => [x.narrativeId, Number(x.c)]));
 
       res.json({
         ok: true,
@@ -58,7 +77,7 @@ export function getNarrativesHistory(req: Request, res: Response) {
           version: r.version,
           createdAt: r.createdAt.toISOString(),
           updatedAt: r.updatedAt.toISOString(),
-          messageCount: r._count?.messages ?? 0,
+          messageCount: counts.get(r.id) ?? 0,
         })),
       });
     } catch (e) {
@@ -91,11 +110,21 @@ export function getNarrativeMessages(req: Request, res: Response) {
       };
 
       if (narrativeId) {
-        narrative = await prisma.busNarrative.findUnique({ where: { id: narrativeId } });
+        narrative =
+          (await db.select().from(busNarrative).where(eq(busNarrative.id, narrativeId)))[0] ?? null;
       } else if (ownerModule && sourceKey) {
-        narrative = await prisma.busNarrative.findUnique({
-          where: { ownerModule_sourceKey: { ownerModule, sourceKey } },
-        });
+        narrative =
+          (
+            await db
+              .select()
+              .from(busNarrative)
+              .where(
+                and(
+                  eq(busNarrative.ownerModule, ownerModule),
+                  eq(busNarrative.sourceKey, sourceKey),
+                ),
+              )
+          )[0] ?? null;
       }
 
       if (!narrative) {
@@ -103,19 +132,16 @@ export function getNarrativeMessages(req: Request, res: Response) {
         return;
       }
 
-      const rows = await prisma.busNarrativeMessage.findMany({
-        where: { narrativeId: narrative.id },
-        include: {
-          message: {
-            select: {
-              id: true,
-              createdAt: true,
-              rawJson: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "asc" },
-      });
+      const rows = await db
+        .select({
+          id: busMessage.id,
+          createdAt: busMessage.createdAt,
+          raw: busMessage.rawJson,
+        })
+        .from(busNarrativeMessage)
+        .innerJoin(busMessage, eq(busNarrativeMessage.messageId, busMessage.id))
+        .where(eq(busNarrativeMessage.narrativeId, narrative.id))
+        .orderBy(asc(busNarrativeMessage.createdAt));
 
       res.json({
         ok: true,
@@ -131,9 +157,9 @@ export function getNarrativeMessages(req: Request, res: Response) {
           updatedAt: narrative.updatedAt.toISOString(),
         },
         messages: rows.map((r) => ({
-          id: r.message.id,
-          createdAt: r.message.createdAt.toISOString(),
-          raw: r.message.rawJson,
+          id: r.id,
+          createdAt: r.createdAt.toISOString(),
+          raw: r.raw,
         })),
       });
     } catch (e) {
@@ -188,13 +214,24 @@ export function getNarrativesStream(params: {
           const nv = parsed.data.narrative;
           if (!nv.ownerModule || !nv.sourceKey) continue;
 
-          const record = await prisma.busNarrative.findUnique({
-            where: {
-              ownerModule_sourceKey: { ownerModule: nv.ownerModule, sourceKey: nv.sourceKey },
-            },
-            include: { _count: { select: { messages: true } } },
-          });
+          const record =
+            (
+              await db
+                .select()
+                .from(busNarrative)
+                .where(
+                  and(
+                    eq(busNarrative.ownerModule, nv.ownerModule),
+                    eq(busNarrative.sourceKey, nv.sourceKey),
+                  ),
+                )
+            )[0] ?? null;
           if (!record) continue;
+
+          const [cnt] = await db
+            .select({ c: count() })
+            .from(busNarrativeMessage)
+            .where(eq(busNarrativeMessage.narrativeId, record.id));
 
           const payload = {
             subject: m.subject,
@@ -210,7 +247,7 @@ export function getNarrativesStream(params: {
               version: record.version,
               createdAt: record.createdAt.toISOString(),
               updatedAt: record.updatedAt.toISOString(),
-              messageCount: record._count?.messages ?? 0,
+              messageCount: Number(cnt?.c ?? 0),
             },
           };
 

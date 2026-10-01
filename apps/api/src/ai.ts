@@ -1,4 +1,5 @@
-import { prisma } from "@feedeater/db";
+import { db, setting } from "@feedeater/db";
+import { eq } from "drizzle-orm";
 import type { Request, Response } from "express";
 
 function requireInternalAuth(req: Request): void {
@@ -15,7 +16,7 @@ function requireInternalAuth(req: Request): void {
 }
 
 async function getSystemSettings(): Promise<Record<string, string | null>> {
-  const rows = await prisma.setting.findMany({ where: { module: "system" } });
+  const rows = await db.select().from(setting).where(eq(setting.module, "system"));
   const out: Record<string, string | null> = {};
   for (const r of rows) out[r.key] = r.value;
   return out;

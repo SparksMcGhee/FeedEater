@@ -1,14 +1,16 @@
-import { prisma } from "@feedeater/db";
+import { db, setting } from "@feedeater/db";
+import { asc, eq } from "drizzle-orm";
 import type { Request, Response } from "express";
 
 import { decryptSecret, encryptSecret } from "./crypto.js";
 
 export async function getModuleSettings(req: Request, res: Response) {
   const moduleName = String(req.params.module);
-  const rows = await prisma.setting.findMany({
-    where: { module: moduleName },
-    orderBy: { key: "asc" },
-  });
+  const rows = await db
+    .select()
+    .from(setting)
+    .where(eq(setting.module, moduleName))
+    .orderBy(asc(setting.key));
 
   res.json({
     module: moduleName,
@@ -37,10 +39,11 @@ export async function getModuleSettingsInternal(req: Request, res: Response) {
   requireInternalAuth(req);
 
   const moduleName = String(req.params.module);
-  const rows = await prisma.setting.findMany({
-    where: { module: moduleName },
-    orderBy: { key: "asc" },
-  });
+  const rows = await db
+    .select()
+    .from(setting)
+    .where(eq(setting.module, moduleName))
+    .orderBy(asc(setting.key));
 
   res.json({
     module: moduleName,
@@ -65,11 +68,16 @@ export async function putModuleSetting(req: Request, res: Response) {
   const isSecret = body.isSecret === true;
   const valueToStore = isSecret ? encryptSecret(body.value) : body.value;
 
-  const row = await prisma.setting.upsert({
-    where: { module_key: { module: moduleName, key } },
-    create: { module: moduleName, key, isSecret, value: valueToStore },
-    update: { isSecret, value: valueToStore },
-  });
+  const [row] = await db
+    .insert(setting)
+    .values({ module: moduleName, key, isSecret, value: valueToStore })
+    .onConflictDoUpdate({
+      target: [setting.module, setting.key],
+      set: { isSecret, value: valueToStore, updatedAt: new Date() },
+    })
+    .returning();
+
+  if (!row) throw new Error(`Failed to upsert setting ${moduleName}.${key}`);
 
   res.json({
     module: moduleName,

@@ -1,7 +1,7 @@
 COMPOSE ?= docker compose
 ANSIBLE_INVENTORY ?= ansible/inventory.ini
 
-.PHONY: up down ps logs build pull restart db-push deploy
+.PHONY: up down ps logs build pull restart migrate deploy
 
 up:
 	$(COMPOSE) up -d --build
@@ -30,8 +30,8 @@ deploy:
 	@if [ -z "$$(grep -s FEED_INTERNAL_TOKEN .env | cut -d= -f2)" ]; then echo "ERROR: FEED_INTERNAL_TOKEN missing from .env"; exit 1; fi
 	set -a && . ./.env && set +a && ansible-playbook -i $(ANSIBLE_INVENTORY) ansible/deploy.yml
 
-# Creates/updates platform tables using Prisma (idempotent).
-db-push:
-	$(COMPOSE) run --rm --workdir /app api npx prisma db push --schema packages/db/prisma/schema.prisma
+# Applies versioned migrations (idempotent ledger).
+migrate:
+	$(COMPOSE) run --rm --workdir /app api node packages/db/dist/migrate.js
 
 

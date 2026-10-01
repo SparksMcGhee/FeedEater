@@ -1,8 +1,14 @@
-import { prisma } from "@feedeater/db";
+import { busMessage, db } from "@feedeater/db";
+import { and, desc, eq, gte, ilike, or, type SQL } from "drizzle-orm";
 import type { Request, Response } from "express";
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
+}
+
+// Prisma's `contains` escapes LIKE metacharacters; replicate that.
+function likeParam(q: string): string {
+  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
 export async function getBusHistory(req: Request, res: Response) {
@@ -22,25 +28,22 @@ export async function getBusHistory(req: Request, res: Response) {
 
     const since = new Date(Date.now() - sinceMinutes * 60_000);
 
-    const rows = await prisma.busMessage.findMany({
-      where: {
-        ...(sinceMinutes > 0 ? { createdAt: { gte: since } } : {}),
-        ...(moduleFilter ? { sourceModule: moduleFilter } : {}),
-        ...(streamFilter ? { sourceStream: streamFilter } : {}),
-        ...(q
-          ? {
-              OR: [
-                { message: { contains: q, mode: "insensitive" } },
-                { from: { contains: q, mode: "insensitive" } },
-              ],
-            }
-          : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      take: limit,
-      include: {
+    const conditions: SQL[] = [];
+    if (sinceMinutes > 0) conditions.push(gte(busMessage.createdAt, since));
+    if (moduleFilter) conditions.push(eq(busMessage.sourceModule, moduleFilter));
+    if (streamFilter) conditions.push(eq(busMessage.sourceStream, streamFilter));
+    if (q)
+      conditions.push(
+        or(ilike(busMessage.message, likeParam(q)), ilike(busMessage.from, likeParam(q)))!,
+      );
+
+    const rows = await db.query.busMessage.findMany({
+      where: and(...conditions),
+      orderBy: (m, { desc: d }) => [d(m.createdAt)],
+      limit,
+      with: {
         narratives: {
-          include: { narrative: true },
+          with: { narrative: { columns: { summaryShort: true } } },
         },
       },
     });
@@ -52,7 +55,7 @@ export async function getBusHistory(req: Request, res: Response) {
       items: rows.map((r) => ({
         subject: `feedeater.${r.sourceModule}.messageCreated`,
         receivedAt: r.createdAt.toISOString(),
-        narrativeSummaryShort: r.narratives?.[0]?.narrative?.summaryShort ?? null,
+        narrativeSummaryShort: r.narratives[0]?.narrative?.summaryShort ?? null,
         data: { type: "MessageCreated", message: r.rawJson },
       })),
     });

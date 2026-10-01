@@ -59,8 +59,8 @@ host within the poll interval; rollback to previous image IDs demonstrated once.
 
 Goal: the current product running on the 2026 stack. No product behavior changes.
 
-- [ ] Node 24: `engines`, Docker bases, runner/dev docs
-- [ ] Biome + Vitest wired into `ci.yml` (gate 1); seed unit tests (zod contracts
+- [x] Node 24: `engines`, Docker bases, runner/dev docs
+- [x] Biome + Vitest wired into `ci.yml` (gate 1); seed unit tests (zod contracts
   round-trip, subject grammar, cron→next-run table) so the test stage is real from
   day one; integration gate 2 (service containers: migrations idempotent, outbox
   path); AI stub container + `packages/fixtures` shared test data
@@ -68,8 +68,8 @@ Goal: the current product running on the 2026 stack. No product behavior changes
 - [ ] Drizzle + postgres.js: `packages/db` schema, port all Prisma call sites, delete
   Prisma; `drizzle-kit` baseline migration capturing the *current* DDL; retire
   `Makefile:db-push` and the deploy.yml interim step
-- [ ] PG16 → PG18 + pgvector 0.8 cut-over: **manual `pg_dump` first**, dump/restore
-  into the new volume, one cut-over (plan 03 D1)
+- [x] PG16 → PG18 + pgvector 0.8 cut-over (VM instance: fresh volumes, one-time wipe; spark data
+  migration deferred to cut-over — `pg_dump` first, plan 03 D1)
 - [ ] Next 16 + React 19 migration (async `params`/`cookies`, Turbopack)
 
 **Exit:** plan 01 definition-of-done; identical product behavior; every deploy via pipeline.
